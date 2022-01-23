@@ -65,10 +65,13 @@ def get_centers(cluster, client):
         center_y = 0
         
         dic = cluster[i]
+        if len(dic) == 0:
+            return []
         for dst in dic:
             center_quality += client[dst][0]
             center_x += client[dst][1][0]
             center_y += client[dst][1][1]
+        
         center = (math.ceil(center_quality/len(dic)),[round(center_x/len(dic),8),round(center_y/len(dic),8)])    
         centers.append(center)
     
@@ -92,62 +95,65 @@ def print_graph(client, centers, cluster, n):
 
 def k_means(pos, dsts, video_type, user_limit):
     dst_num = len(dsts)
-    k = 3 #math.ceil(math.sqrt(dst_num))
+    k = math.ceil(math.sqrt(dst_num))
 
-    x_bound_low = min(pos[d].tolist()[0] for d in pos)
-    x_bound_high = max(pos[d].tolist()[0] for d in pos)
-    y_bound_low = min(pos[d].tolist()[1] for d in pos)
-    y_bound_high = max(pos[d].tolist()[1] for d in pos)
+    x_bound_low = min(pos[d][0] for d in pos)
+    x_bound_high = max(pos[d][0] for d in pos)
+    y_bound_low = min(pos[d][1] for d in pos)
+    y_bound_high = max(pos[d][1] for d in pos)
 
     client = dict()
     for dst in dsts:
         q = dsts[dst]
-        pos_convert = [round(pos[dst].tolist()[0],8), round(pos[dst].tolist()[1],8)]
+        pos_convert = [round(pos[dst][0],8), round(pos[dst][1],8)]
         client[dst] = (video_type.index(q), pos_convert)
     
     isFinish = 0
-    while (isFinish < k):
-        # random samples
+    while isFinish == 0:
+        # Random samples
         centers = []
         for i in range(k):
             sample = (random.randint(0, len(video_type)), [round(random.uniform(x_bound_low,x_bound_high),8), round(random.uniform(y_bound_low,y_bound_high),8)])
             centers.append(sample)
 
-        # cluster users
-        isFinish = 0
+        # Cluster users
         cluster = clustering(client, centers)
+
+        if min(len(cluster[i]) for i in cluster) <= user_limit:
+            continue
         
-        for i in cluster:
-            if len(cluster[i]) >= user_limit:
-                isFinish += 1
-
-    # Calculate new cluster centers
-    new_centers = get_centers(cluster, client)
-
-    isConvergence = 0
-    max_dif = -1
-    count = 0
-
-    # Check if the clustering convergence or not
-    while isConvergence == 0:
-        max_dif = -1
-        for i in range(k):
-            distance = math.sqrt((centers[i][1][0] - new_centers[i][1][0])**2 + (centers[i][1][1] - new_centers[i][1][1])**2)
-            dif = math.sqrt((centers[i][0] - new_centers[i][0])**2 + distance**2)
-            max_dif = max(max_dif, dif)
-        
-        #print(max_dif)
-        if max_dif < 10**-10:
-            isConvergence = 1
-            break
-
-        centers = new_centers
-
-        cluster = clustering(client, centers)
-        
+        # Calculate new cluster centers
         new_centers = get_centers(cluster, client)
 
-        count += 1
-     
-    return cluster
+        isConvergence = 0
 
+        # Check if the clustering convergence or not
+        while isConvergence == 0:
+            max_dif = -1
+            for i in range(k-1):
+                distance = math.sqrt((centers[i][1][0] - new_centers[i][1][0])**2 + (centers[i][1][1] - new_centers[i][1][1])**2)
+                dif = math.sqrt((centers[i][0] - new_centers[i][0])**2 + distance**2)
+                max_dif = max(max_dif, dif)
+            
+            #print(max_dif)
+            if max_dif < 10**-10:
+                isConvergence = 1
+                break
+
+            centers = new_centers
+
+            cluster = clustering(client, centers)
+
+            if min(len(cluster[i]) for i in cluster) <= user_limit:
+                continue
+            
+            new_centers = get_centers(cluster, client)
+        
+        if min(len(cluster[i]) for i in cluster) <= user_limit:
+            k -= 1
+            if k < 1: k = 1
+            isFinish = 0
+        else:
+            isFinish = 1
+
+    return cluster

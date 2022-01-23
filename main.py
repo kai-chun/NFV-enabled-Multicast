@@ -13,7 +13,7 @@ beta = 1 - alpha
 dst_num = random.randint(5, 10)
 vnf_num = random.randint(2, 3)
 vnf_type = {'t': 1} #,'b':1,'c':1,'d':1,'e':1}
-quality_list = {'224p': 0.25, '360p': 0.3, '480p': 0.5, '720p': 0.7, '1080p': 1}
+quality_list = {'360p': 0.3, '480p': 0.5, '720p': 0.7, '1080p': 1}
 user_limit = 1
 
 # Generate topology
