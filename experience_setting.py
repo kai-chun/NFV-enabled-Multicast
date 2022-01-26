@@ -16,27 +16,45 @@ import re
 
 def create_topology(node_num, edge_prob):
     ### Use realistic topology
-    # G = nx.read_gml("topology/Aarnet.gml")
+    input_G = nx.read_gml("topology/Abilene.gml")
 
-    ### Random
-    random_seed = 138
-    G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
-    while nx.is_connected(G) == False:
-        G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
+    pos = {}
+    node_list = {}
+    for i,n in enumerate(input_G.nodes(data=True)):
+        node_list[n[0]] = i
+        pos[i] = [n[1]['Longitude'],n[1]['Latitude']]
 
-    #G = nx.Graph()
+    edge_list = []
+    edge_attr = {}
+    for n1, n2, dic in input_G.edges(data=True):
+        e = (node_list[n1], node_list[n2])
+        edge_list.append(e)
+        link_label = dic['LinkLabel'].split(' ')
+        edge_attr[e] = {}
+        #edge_attr[e]['bandwidth'] = int(link_label[0])
+        #edge_attr[e]['data_rate'] = 0
 
-    # N = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    # E = [(0, 1), (0, 4), (0, 6), (0, 7), (1, 9), (2, 3), (2, 5), (2, 8), (2, 9), (3, 4), (3, 6), (6, 7), (7, 8), (7, 9)]
-    # G.add_nodes_from(N)
-    # G.add_edges_from(E)
-
+    G = nx.Graph()
+    G.add_nodes_from(list(range(len(node_list))))
+    G.add_edges_from(edge_list)
+    
     nx.set_node_attributes(G, {n: {'capacity': round(random.uniform(2.5,10), 2)} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
+    #nx.set_edge_attributes(G, edge_attr)
+
+    ### Random
+    # random_seed = 138
+    # G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
+    # while nx.is_connected(G) == False:
+    #     G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
+    # pos = nx.spring_layout(G) 
+
+    #nx.set_node_attributes(G, {n: {'capacity': round(random.uniform(2.5,10), 2)} for n in G.nodes})
+    #nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
     nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(2.5,10), 2)} for e in G.edges})
     nx.set_edge_attributes(G, {e: {'data_rate': 0} for e in G.edges})
 
-    return G
+    return (G, pos)
 
 '''
 Random the set of clients of multicast task.
@@ -69,13 +87,14 @@ def cal_transcode_bitrate(data_rate, input_q, output_q):
 '''
 Generate the experience data
 '''
-def generate_exp(graph_exp, service_exp, order):
+def generate_exp(graph_exp, service_exp, order, factor, factor_num):
     # Generate topology
-    G = create_topology(graph_exp['node_num'], graph_exp['edge_prob'])
+    tmp = create_topology(graph_exp['node_num'], graph_exp['edge_prob'])
+    G = tmp[0]
+    pos = tmp[1]
     N = G.nodes()
-    pos = nx.spring_layout(G)
       
-    output_file = open('exp_setting/G_'+str(order)+'.txt', 'w')
+    output_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_'+str(order)+'.txt', 'w')
     for n,dic in G.nodes(data=True):
         output_file.write(str(n)+" "+str(dic['capacity'])+"\n")
 
@@ -98,7 +117,7 @@ def generate_exp(graph_exp, service_exp, order):
     # sfc = ['t']
     # service = (src, dsts, sfc, quality_list['1080p'])
     
-    output_file_client = open('exp_setting/service_'+str(order)+'.txt', 'w')
+    output_file_client = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_'+str(order)+'.txt', 'w')
     output_file_client.write(str(src)+"\n")
     for d in dsts:
         output_file_client.write(str(d)+" "+str(dsts[d])+"\n")
@@ -107,8 +126,8 @@ def generate_exp(graph_exp, service_exp, order):
 '''
 Read the experience data of graph
 '''
-def read_exp_graph(order):
-    input_file = open('exp_setting/G_'+str(order)+'.txt', 'r', 1)
+def read_exp_graph(order, factor, factor_num):
+    input_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_'+str(order)+'.txt', 'r', 1)
     content = input_file.readlines()
 
     index = 0
@@ -146,8 +165,8 @@ def read_exp_graph(order):
 '''
 Read the experience data of service
 '''
-def read_exp_service(order):
-    input_data = open('exp_setting/service_'+str(order)+'.txt', 'r', 1)
+def read_exp_service(order, factor, factor_num):
+    input_data = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_'+str(order)+'.txt', 'r', 1)
     src = int(input_data.readline())
 
     content = input_data.readlines()

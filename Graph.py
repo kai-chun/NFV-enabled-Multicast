@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import networkx as nx
+from numpy import true_divide
 
 '''
 Calculate the cost of multicast path
@@ -18,9 +19,8 @@ def cal_total_cost(G):
             plac_cost += len(set(v[0] for v in dic['vnf']))
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
-            
-    return trans_cost + proc_cost + plac_cost
 
+    return trans_cost + proc_cost + plac_cost
 
 '''
 print graph
@@ -139,4 +139,6 @@ def add_new_vnf(G, path, path_set, dst, node, vnf, data_rate):
         G.nodes[node]['vnf'].append((vnf, data_rate[1],data_rate[2]))
         path.nodes[node]['vnf'].append((vnf, data_rate[1], data_rate[2]))
         G.nodes[node]['capacity'] -= data_rate[2]
+        return True
+    return False
     
