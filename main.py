@@ -1,7 +1,6 @@
 import random
 import networkx as nx
 import matplotlib.pyplot as plt
-from networkx.algorithms import clique
 
 import Graph
 import experience_setting as exp_set

@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import networkx as nx
-from numpy import true_divide
 
 '''
 Calculate the cost of multicast path
@@ -11,6 +10,7 @@ def cal_total_cost(G):
     trans_cost = 0
     proc_cost = 0
     plac_cost = 0
+    total_cost = 0
 
     for (n1,n2,dic) in G.edges(data=True):
         trans_cost += dic['data_rate']
@@ -19,8 +19,14 @@ def cal_total_cost(G):
             plac_cost += len(set(v[0] for v in dic['vnf']))
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
+    total_cost = trans_cost + proc_cost + plac_cost
+    return (total_cost, trans_cost, proc_cost, plac_cost)
 
-    return trans_cost + proc_cost + plac_cost
+def cal_trans_cost(G):
+    trans_cost = 0
+    for (n1,n2,dic) in G.edges(data=True):
+        trans_cost += dic['data_rate']
+    return trans_cost
 
 '''
 print graph
@@ -71,20 +77,18 @@ Find common path for adding new edge
 def find_common_path_len_edge(path, dst, shortest_path_set, data_rate, video_type):
     move_dst = [dst]
     common_length = 0
-    
+
     # Find union path of dst
-    for i in range(len(shortest_path_set[dst])-1):
+    for i in range(len(shortest_path_set[dst])):
         common_flag = 0
         for d in shortest_path_set:
+            # print(d, shortest_path_set[d])
             if len(shortest_path_set[d])-1 <= i:
                 move_dst.append(d)
             # Check if there have better quality been through the edge
             if d not in move_dst and shortest_path_set[dst][i] == shortest_path_set[d][i] and common_flag == 0:
                 e = (shortest_path_set[d][i], shortest_path_set[d][i+1])
-                index = video_type.index(data_rate[1])
-                edge_video_list = [video_type.index(q) for q in path.edges[e]['data']]
-                
-                if index <= max(edge_video_list):
+                if data_rate[1] in path.edges[e]['data']:
                     common_flag = 1
             if d not in move_dst and shortest_path_set[dst][i] != shortest_path_set[d][i]:
                 move_dst.append(d)
@@ -120,9 +124,9 @@ def find_common_path_len_node(path, dst, shortest_path_set, data_rate):
     return common_length
 
 def add_new_edge(G, path, path_set, dst, e, data_rate, video_type):
-    #print('add_new_edge')
     if path.has_edge(*e) == False:
         path.add_edge(*e,data_rate=data_rate[2],data=[data_rate[1]])
+        #print(path.edges[e]['data'])
         G.edges[e]['data_rate'] += data_rate[2]
         G.edges[e]['bandwidth'] -= data_rate[2]
     else:
@@ -134,6 +138,9 @@ def add_new_edge(G, path, path_set, dst, e, data_rate, video_type):
             G.edges[e]['bandwidth'] -= data_rate[2]
 
 def add_new_vnf(G, path, path_set, dst, node, vnf, data_rate):
+    for n in path.nodes:
+        if 'vnf' not in path.nodes[n]:
+            path.add_node(n, vnf=[])
     commom_len = find_common_path_len_node(path, dst, path_set, data_rate)
     if path_set[dst].index(node) >= commom_len:
         G.nodes[node]['vnf'].append((vnf, data_rate[1],data_rate[2]))

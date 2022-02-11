@@ -93,12 +93,15 @@ def print_graph(client, centers, cluster, n):
     plt.show()
 
 
-def k_means(pos, dsts, video_type, user_limit):
+def k_means(pos, dsts, video_type, user_limit, is_group):
     dst_num = len(dsts)
-    if dst_num < 4:
+    if dst_num <= 5:
         k = 1    
     else:
         k = math.ceil(math.sqrt(dst_num))
+
+    if is_group == 0:
+        k = 1
 
     x_bound_low = min(pos[d][0] for d in pos)
     x_bound_high = max(pos[d][0] for d in pos)
