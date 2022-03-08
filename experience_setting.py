@@ -64,7 +64,8 @@ def create_topology(node_num, edge_prob):
     #     G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
     # pos = nx.spring_layout(G) 
 
-    nx.set_node_attributes(G, {n: {'capacity': round(random.uniform(2.5,10), 2)} for n in G.nodes})
+    nx.set_node_attributes(G, {n: {'mem_capacity': 5} for n in G.nodes})
+    nx.set_node_attributes(G, {n: {'com_capacity': round(random.uniform(2.5,10), 2)} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
     nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(2.5,10), 2)} for e in G.edges})
     nx.set_edge_attributes(G, {e: {'data_rate': 0} for e in G.edges})
@@ -118,7 +119,7 @@ def generate_exp(graph_exp, service_exp, order, factor, factor_num):
       
     output_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_'+str(order)+'.txt', 'w')
     for n,dic in G.nodes(data=True):
-        output_file.write(str(n)+" "+str(dic['capacity'])+"\n")
+        output_file.write(str(n)+" "+str(dic['com_capacity'])+"\n")
 
     output_file.write("\n")
 
@@ -159,7 +160,7 @@ def read_exp_graph(order, factor, factor_num):
             index = i+1
             break
         line = list(re.split(' ', content[i]))
-        node = (int(line[0]), {'capacity': float(line[1][:-1]), 'vnf': []})
+        node = (int(line[0]), {'com_capacity': float(line[1][:-1]), 'mem_capacity': 5, 'vnf': []})
         node_list.append(node)
 
     edge_list = []

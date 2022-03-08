@@ -62,6 +62,4 @@ Graph.printGraph(G, pos, 'G', service, 'bandwidth')
 
 接著找最近的 group
 對這兩個組找最好的品質，並對這兩個組的上游找可以放轉碼器的部分
-
-這樣分組是不是純粹以品質分就好不要考慮地理位置？
 '''

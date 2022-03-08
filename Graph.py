@@ -74,27 +74,53 @@ def count_instance(G):
 '''
 Find common path for adding new edge
 '''
-def find_common_path_len_edge(path, dst, shortest_path_set, data_rate, video_type):
-    move_dst = [dst]
-    common_length = 0
+# def find_common_path_len_edge(path, dst, shortest_path_set, data_rate, video_type):
+#     move_dst = [dst]
+#     common_length = 0
 
-    # Find union path of dst
-    for i in range(len(shortest_path_set[dst])):
+#     # Find union path of dst
+#     for i in range(1,len(shortest_path_set[dst])):
+#         common_flag = 0
+#         for d in shortest_path_set:
+#             # print(d, shortest_path_set[d])
+#             if len(shortest_path_set[d]) <= i:
+#                 move_dst.append(d)
+#             # Check if there have better quality been through the edge
+#             if d not in move_dst and shortest_path_set[dst][i] == shortest_path_set[d][i] and common_flag == 0:
+#                 e = (shortest_path_set[d][i-1], shortest_path_set[d][i])
+                
+#                 if data_rate[1] in path.edges[e]['data']:
+#                     common_flag = 1
+#             if d not in move_dst and shortest_path_set[dst][i] != shortest_path_set[d][i]:
+#                 move_dst.append(d)
+#             if common_flag == 1:
+#                 common_length += 1
+#             #common_flag = 0
+
+#     return common_length
+
+def find_common_path_len_edge(dst, shortest_path_set, all_data_rate):
+    move_dst = [dst]
+    common_length = 1
+    
+    # Find union path of dst 15: [22, 17, 16, 15], 10: [22, 17, 16, 15, 10]
+    for i in range(1,len(shortest_path_set[dst])):
         common_flag = 0
         for d in shortest_path_set:
-            # print(d, shortest_path_set[d])
-            if len(shortest_path_set[d])-1 <= i:
+            if len(shortest_path_set[d])-1 < i:
                 move_dst.append(d)
             # Check if there have better quality been through the edge
-            if d not in move_dst and shortest_path_set[dst][i] == shortest_path_set[d][i] and common_flag == 0:
-                e = (shortest_path_set[d][i], shortest_path_set[d][i+1])
-                if data_rate[1] in path.edges[e]['data']:
+            if d not in move_dst and shortest_path_set[dst][i] == shortest_path_set[d][i]:
+                if all_data_rate[dst][i-1][1] == all_data_rate[d][i-1][1]:
+                    # print(shortest_path_set[dst], shortest_path_set[d], end=' ')
                     common_flag = 1
+                else:
+                    move_dst.append(d)
             if d not in move_dst and shortest_path_set[dst][i] != shortest_path_set[d][i]:
                 move_dst.append(d)
-            if common_flag == 1:
-                common_length += 1
-            common_flag = 0
+        if common_flag == 1:
+            common_length += 1
+
     return common_length
 
 '''
@@ -123,15 +149,29 @@ def find_common_path_len_node(path, dst, shortest_path_set, data_rate):
 
     return common_length
 
-def add_new_edge(G, path, path_set, dst, e, data_rate, video_type):
+# def add_new_edge(G, path, path_set, dst, e, data_rate, video_type):
+#     if path.has_edge(*e) == False:
+#         path.add_edge(*e,data_rate=data_rate[2],data=[data_rate[1]])
+#         #print(path.edges[e]['data'])
+#         G.edges[e]['data_rate'] += data_rate[2]
+#         G.edges[e]['bandwidth'] -= data_rate[2]
+#     else:
+#         commom_len = find_common_path_len_edge(path, dst, path_set, data_rate, video_type)
+#         if len(path_set[dst])-1 > commom_len:
+#             path.edges[e]['data_rate'] += data_rate[2]
+#             path.edges[e]['data'].append(data_rate[1])
+#             G.edges[e]['data_rate'] += data_rate[2]
+#             G.edges[e]['bandwidth'] -= data_rate[2]
+
+def add_new_edge(G, path, path_set, dst, e, data_rate, all_data_rate):
     if path.has_edge(*e) == False:
         path.add_edge(*e,data_rate=data_rate[2],data=[data_rate[1]])
-        #print(path.edges[e]['data'])
         G.edges[e]['data_rate'] += data_rate[2]
         G.edges[e]['bandwidth'] -= data_rate[2]
     else:
-        commom_len = find_common_path_len_edge(path, dst, path_set, data_rate, video_type)
-        if len(path_set[dst])-1 > commom_len:
+        commom_len = find_common_path_len_edge(dst, path_set, all_data_rate)
+
+        if len(path_set[dst]) > commom_len:
             path.edges[e]['data_rate'] += data_rate[2]
             path.edges[e]['data'].append(data_rate[1])
             G.edges[e]['data_rate'] += data_rate[2]
@@ -145,7 +185,7 @@ def add_new_vnf(G, path, path_set, dst, node, vnf, data_rate):
     if path_set[dst].index(node) >= commom_len:
         G.nodes[node]['vnf'].append((vnf, data_rate[1],data_rate[2]))
         path.nodes[node]['vnf'].append((vnf, data_rate[1], data_rate[2]))
-        G.nodes[node]['capacity'] -= data_rate[2]
+        G.nodes[node]['com_capacity'] -= data_rate[2]
         return True
     return False
     
