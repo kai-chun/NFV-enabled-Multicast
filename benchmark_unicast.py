@@ -111,6 +111,10 @@ def search_unicast_path(G, pos, service, quality_list):
                                 data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))  
                         else:
                             break
+                    else:
+                        break
+                if data_rate[dst][-1][0] != j:
+                    data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
             
             e = (shortest_path[i],shortest_path[i+1])
             add_new_edge(G_min, unicast_path_min, e, data_rate[dst][-1])
@@ -145,7 +149,8 @@ def search_unicast_path(G, pos, service, quality_list):
                 if data[0] not in update_shortest_path_set[dst]:
                     data_rate[dst].pop(i)
                 if len(update_shortest_path_set[dst]) == 1:
-                    data_rate[dst] = []
+                    data_rate[dst] = [(src, best_quality, quality_list[best_quality])]
+                    break
 
         # Rebuilding the multicast path with update_shortest_path_set
         G_min.remove_edges_from(G_min.edges())
@@ -243,15 +248,15 @@ def search_unicast_path(G, pos, service, quality_list):
                         G_min.nodes[i]['vnf'].append((vnf, data_rate[dst][-1][1],data_rate[dst][-1][2]))
                         unicast_path_min.nodes[i]['vnf'].append((vnf, data_rate[dst][-1][1], data_rate[dst][-1][2]))
                         G_min.nodes[i]['com_capacity'] -= data_rate[dst][-1][2]
-                        place_flag = 1   
+                        place_flag = 1
 
                         # Processing data with transcoder
                         if "t" in vnf: # This vnf is transcoder
                             output_q = dsts[dst]
                             update_data_rate = exp_set.cal_transcode_bitrate(data_rate[dst][-1][2], data_rate[dst][-1][1], output_q)
-                            data_rate[dst].append((j,output_q,update_data_rate))
+                            data_rate[dst].append((i,output_q,update_data_rate))
                         else:
-                            data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))  
+                            data_rate[dst].append((i,data_rate[dst][-1][1],data_rate[dst][-1][2]))  
                     
                         if index_sfc[dst]['index'] >= len(sfc[dst])-1: # finish sfc
                             break

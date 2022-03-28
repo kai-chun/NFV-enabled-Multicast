@@ -58,6 +58,11 @@ def update_path(sfc, index_sfc, sort_dsts, G, G_min, multicast_path, shortest_pa
         if index_sfc[dst]['index'] < len(sfc[dst])-1:
             missing_vnf_dsts.append(dst)
 
+    tmp_d = list(data_rate.keys())[0]
+    src = data_rate[tmp_d][0][0]
+    best_quality = data_rate[tmp_d][0][1]
+    data_size = data_rate[tmp_d][0][2]
+
     if len(missing_vnf_dsts) > 0:
         # Remove unnecessary edges: the path from last vnf node to dst
         update_shortest_path_set = copy.deepcopy(shortest_path_set)
@@ -79,7 +84,8 @@ def update_path(sfc, index_sfc, sort_dsts, G, G_min, multicast_path, shortest_pa
                 if data[0] not in update_shortest_path_set[dst]:
                     data_rate[dst].pop(i)
                 if len(update_shortest_path_set[dst]) == 1:
-                    data_rate[dst] = []
+                    data_rate[dst] = [(src, best_quality, data_size)]
+                    break
 
         # Rebuilding the multicast path with update_shortest_path_set
         G_min.remove_edges_from(G_min.edges())
@@ -127,17 +133,17 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
     # If dsts need different quality of video then place a transcoder
     if max_transcoder_num > 0: 
         for d in dst_list:
-            for q in sort_quality:
-                if dsts[d] != q:
+            if dsts[d] != best_quality:
+                if isReuse:
                     sfc[d].append('t')
                 else:
-                    break
+                    sfc[d].append('t_'+str(d))
 
-    print('--- environment ---')
-    print('src = ', src, ", dst = ", dsts)
-    print(sort_dsts)
-    print("sfc = ", sfc)
-    print('===============')
+    # print('--- environment ---')
+    # print('src = ', src, ", dst = ", dsts)
+    # print(sort_dsts)
+    # print("sfc = ", sfc)
+    # print('===============')
 
     G_min = copy.deepcopy(G) # record the min cost network 
     multicast_path_min = nx.Graph() # record the min cost path
@@ -231,49 +237,57 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
 
                         # There are vnf instance on node j
                         if isReuse and vnf in list(v[0] for v in tmp_G.nodes[j]['vnf']):
-                            if tmp_G.nodes[j]['com_capacity'] > data_rate[dst][-1][2]: # compute capacity
-                                isPlaceNew = Graph.add_new_vnf(tmp_G, tmp_multicast_path, shortest_path_set, dst, j, vnf, data_rate[dst][-1])
+                            # Processing data with transcoder
+                            if "t" in vnf: # This vnf is transcoder
+                                output_q = dsts[dst]
+                                update_data_rate = exp_set.cal_transcode_bitrate(data_rate[dst][-1][2], data_rate[dst][-1][1], output_q)
+                                data_rate[dst].append((j,output_q,update_data_rate))
+                            else:
+                                data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                            
+                            is_process_data = Graph.add_new_processing_data(tmp_G, tmp_multicast_path, shortest_path_set, dst, j, vnf, data_rate[dst][-2], data_rate)
+                            
+                            if is_process_data == True:
                                 index_sfc[dst]['index'] += 1
                                 index_sfc[dst]['place_node'].append(j)
-
-                                # Processing data with transcoder
-                                if "t" in vnf: # This vnf is transcoder
-                                    output_q = dsts[dst]
-                                    update_data_rate = exp_set.cal_transcode_bitrate(data_rate[dst][-1][2], data_rate[dst][-1][1], output_q)
-                                    data_rate[dst].append((j,output_q,update_data_rate))
-                                else:
-                                    data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-                            continue
+                            #else:
+                                #data_rate[dst].pop(-1)
+                        
+                        if index_sfc[dst]['index'] >= len(sfc[dst])-1: # finish sfc
+                            break
                         
                         # Check if the node has enough resource to place instance
                         if tmp_G.nodes[j]['mem_capacity'] > 0: # memory capacity
-                            if tmp_G.nodes[j]['com_capacity'] > data_rate[dst][-1][2]:
-                                isPlaceNew = Graph.add_new_vnf(tmp_G, tmp_multicast_path, shortest_path_set, dst, j, vnf, data_rate[dst][-1])
-                                
-                                if isReuse or isPlaceNew == True:
-                                    index_sfc[dst]['index'] += 1
-                                    index_sfc[dst]['place_node'].append(j)
+                            # add new vnf instance
+                            if vnf not in list(v[0] for v in tmp_multicast_path.nodes[j]['vnf']): 
+                                tmp_G.nodes[j]['mem_capacity'] -= 1
 
-                                    if vnf not in tmp_multicast_path.nodes[j]['vnf']: 
-                                        tmp_G.nodes[j]['mem_capacity'] -= 1
-                                    
-                                    # Processing data with transcoder
-                                    if "t" in vnf: # This vnf is transcoder
-                                        output_q = dsts[dst]
-                                        update_data_rate = exp_set.cal_transcode_bitrate(data_rate[dst][-1][2], data_rate[dst][-1][1], output_q)
-                                        data_rate[dst].append((j,output_q,update_data_rate))
-                                    else:
-                                        data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-                                else:
-                                    break
+                            # Processing data with transcoder
+                            if "t" in vnf: # This vnf is transcoder
+                                output_q = dsts[dst]
+                                update_data_rate = exp_set.cal_transcode_bitrate(data_rate[dst][-1][2], data_rate[dst][-1][1], output_q)
+                                data_rate[dst].append((j,output_q,update_data_rate))
                             else:
+                                data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                            
+                            is_process_data = Graph.add_new_processing_data(tmp_G, tmp_multicast_path, shortest_path_set, dst, j, vnf, data_rate[dst][-2], data_rate)
+                            
+                            if is_process_data == True:
+                                index_sfc[dst]['index'] += 1
+                                index_sfc[dst]['place_node'].append(j)
+                            else:
+                                #data_rate[dst].pop(-1)
+                                if vnf not in list(v[0] for v in tmp_multicast_path.nodes[j]['vnf']):
+                                    tmp_G.nodes[j]['mem_capacity'] += 1
                                 break
                         else:
                             break
+                    if data_rate[dst][-1][0] != j:
+                        data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
 
                 # Update the bandwidth of link
                 e = (shortest_path[i],shortest_path[i+1])
-                Graph.add_new_edge(tmp_G, tmp_multicast_path, shortest_path_set, dst, e, data_rate[dst][-1], video_type)
+                Graph.add_new_edge(tmp_G, tmp_multicast_path, shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
 
             #Graph.printGraph(tmp_multicast_path, pos, 'tmp', service, 'data_rate')
         
@@ -307,15 +321,14 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
     A corrective subroutine that places the missing NF instances 
     on the closest NFV node from the multicast topology.
     '''
-    tmp = update_path(sfc, index_sfc_min, sort_dsts, G, G_min, multicast_path_min, shortest_path_set, min_data_rate, video_type)
+    tmp = update_path(sfc, index_sfc_min, sort_dsts, G, G_min, multicast_path_min, shortest_path_set, min_data_rate)
     missing_vnf_dsts = tmp[0]
     update_shortest_path_set = tmp[1]
-    tmp_list = tmp[2]
 
     # Graph.printGraph(G, pos, 'G', service, 'bandwidth')
     # Graph.printGraph(G_min, pos, 'G_min_remove', service, 'bandwidth')
     # Graph.printGraph(multicast_path_min, pos, 'path_remove', service, 'data_rate')
-
+    
     # Fill up the empty min_data_rate[dst] with best quality (initial date to send)
     for d in dst_list:
         if len(min_data_rate[d]) == 0:
@@ -328,33 +341,42 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             continue
 
         find_distance = 0 # the length range of finding node away from last_node that placing VNF
-        place_flag = 0 # whether placing VNF or not
+        place_flag = 0 # whether placing VNF or not (share or initiate), 0: not place, 1: place, 2: the node can't place
         
         while index_sfc_min[dst]['index'] < len(sfc[dst])-1:
             last_node = update_shortest_path_set[dst][-1]
-            if place_flag == 0:
+            if place_flag != 1:
                 find_distance += 1
                 if find_distance >= len(G.edges()):
-                    print('cannott find path')
+                    print('cannot find path')
                     return (G, nx.Graph())
             else:
                 find_distance = 1
                 place_flag = 0
-            alternate_nodes_len = nx.single_source_shortest_path_length(G_min, last_node, find_distance)
-            alternate_nodes = list(n for n in nx.single_source_shortest_path_length(G_min, last_node, find_distance))
             
+            alternate_nodes_len = nx.single_source_shortest_path_length(G_min, last_node, find_distance)
+            alternate_nodes = list(n for n in alternate_nodes_len)
+
+            # Find the node with distance(<= find_distance) between last_node to place the unsatisfied VNF.
+            # If find the node to place, then restart to find another node to place next VNF.
             for i in alternate_nodes:
+                # if place_flag != 0:
+                #     break
+                ### 改過 not sure
                 if place_flag == 1:
                     break
+                
                 # If find_distance > 1, the node that distance = 1 have been searched
                 # it don't have to consider the node again
-                if find_distance > 1 and alternate_nodes_len[i] == find_distance-1:
+                if find_distance > 1 and alternate_nodes_len[i] <= find_distance-1:
                     continue
 
                 last_node = update_shortest_path_set[dst][-1]
                 shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='data_rate')
                 
                 vnf = sfc[dst][index_sfc_min[dst]['index']+1]
+
+                # Don't place on last_node, src, and dst
                 if i == last_node or i == src or i == dst:
                     continue
 
@@ -362,42 +384,55 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 while vnf in list(v[0] for v in G_min.nodes[i]['vnf']):
                     if isReuse == False:
                         break
-                    ### 判斷是否為多播，又有處理過的資源
-                    if G_min.nodes[j]['com_capacity'] > update_data_rate[dst][-1][2]: # compute capacity
+                    tmp_G = copy.deepcopy(G_min)
+                    tmp_path = copy.deepcopy(multicast_path_min)
+                    tmp_path_set = copy.deepcopy(update_shortest_path_set)
+                    tmp_data_rate = copy.deepcopy(min_data_rate)
+                    
+                    # Processing data with transcoder
+                    if "t" in vnf: # This vnf is transcoder
+                        output_q = dsts[dst]
+                        update_data_rate = exp_set.cal_transcode_bitrate(min_data_rate[dst][-1][2], min_data_rate[dst][-1][1], output_q)
+                        min_data_rate[dst].append((i,output_q,update_data_rate))
+                    else:
+                        min_data_rate[dst].append((i,min_data_rate[dst][-1][1],min_data_rate[dst][-1][2])) 
+
+                    # If it has placed vnf, there don't need to add edge again.
+                    if place_flag != 1:
+                        # Add edge to connect node
+                        if find_distance == 1:
+                            if update_shortest_path_set[dst][-1] != i:
+                                update_shortest_path_set[dst].append(i)
+                            if i not in multicast_path_min:
+                                multicast_path_min.add_node(i, vnf=[])
+                            
+                            e = (last_node, i)
+                            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-2], min_data_rate)
+                        else:
+                            for j in range(len(shortest_path)-1):
+                                if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
+                                    update_shortest_path_set[dst].append(shortest_path[j+1])
+                                if shortest_path[j] not in multicast_path_min:
+                                    multicast_path_min.add_node(shortest_path[j], vnf=[])
+                                e = (shortest_path[j], shortest_path[j+1])
+                                if j != 0:
+                                    min_data_rate[dst].insert(-2, (shortest_path[j],min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
+                                    #min_data_rate[dst].append((shortest_path[j],min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
+                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-2], min_data_rate)
+                    
+                    is_process_data = Graph.add_new_processing_data(G_min, multicast_path_min, update_shortest_path_set, dst, i, vnf, min_data_rate[dst][-2], min_data_rate)
+
+                    if is_process_data == True:
                         index_sfc_min[dst]['index'] += 1
                         index_sfc_min[dst]['place_node'].append(i)
-
-                        # Processing data with transcoder
-                        if "t" in vnf: # This vnf is transcoder
-                            output_q = dsts[dst]
-                            update_data_rate = exp_set.cal_transcode_bitrate(min_data_rate[dst][-1][2], min_data_rate[dst][-1][1], output_q)
-                            min_data_rate[dst].append((i,output_q,update_data_rate))
-                        else:
-                            min_data_rate[dst].append((i,min_data_rate[dst][-1][1],min_data_rate[dst][-1][2])) 
-
-                        # If it has placed vnf, there don't need to add edge again.
-                        if place_flag != 1:
-                            if find_distance == 1:
-                                if update_shortest_path_set[dst][-1] != i:
-                                    update_shortest_path_set[dst].append(i)
-                                if i not in multicast_path_min:
-                                    multicast_path_min.add_node(i, vnf=[])
-                                
-                                e = (last_node, i)
-                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-1], video_type)
-                            else:
-                                for j in range(len(shortest_path)-1):
-                                    if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
-                                        update_shortest_path_set[dst].append(shortest_path[j+1])
-                                    if j not in multicast_path_min:
-                                        multicast_path_min.add_node(shortest_path[j], vnf=[])
-                                    e = (shortest_path[j], shortest_path[j+1])
-                                    if j != 0:
-                                        min_data_rate[dst].append((j,min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
-                                    Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-1], video_type)
-
-                        isPlaceNew = Graph.add_new_vnf(G_min, multicast_path_min, update_shortest_path_set, dst, i, vnf, min_data_rate[dst][-1])
                         place_flag = 1
+                    else:
+                        G_min = copy.deepcopy(tmp_G)
+                        multicast_path_min = copy.deepcopy(tmp_path)
+                        update_shortest_path_set = copy.deepcopy(tmp_path_set)
+                        min_data_rate = copy.deepcopy(tmp_data_rate)
+                        place_flag = 2
+                        break
 
                     if index_sfc_min[dst]['index'] >= len(sfc[dst])-1: # finish sfc
                         break
@@ -408,55 +443,68 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
 
                 # Check if node has enough resource to place instance
                 while G_min.nodes[i]['mem_capacity'] >= 0: # memory capacity
-                    if G_min.nodes[i]['com_capacity'] > min_data_rate[dst][-1][2]: # compute capacity
-                        if i not in multicast_path_min:
-                            multicast_path_min.add_node(i, vnf=[])
+                    if i not in multicast_path_min:
+                        multicast_path_min.add_node(i, vnf=[])
+                    
+                    tmp_G = copy.deepcopy(G_min)
+                    tmp_path = copy.deepcopy(multicast_path_min)
+                    tmp_path_set = copy.deepcopy(update_shortest_path_set)
+                    tmp_data_rate = copy.deepcopy(min_data_rate)
 
-                        tmp_G_min = copy.deepcopy(G_min)
-                        tmp_multicast_path_min = copy.deepcopy(multicast_path_min)
-                        tmp_update_shortest_path_set = copy.deepcopy(update_shortest_path_set)
+                    for n in multicast_path_min.nodes:
+                        if 'vnf' not in multicast_path_min.nodes[n]:
+                            multicast_path_min.add_node(n, vnf=[])
+                    if vnf not in list(v[0] for v in multicast_path_min.nodes[i]['vnf']): 
+                        G_min.nodes[i]['mem_capacity'] -= 1
 
-                        if vnf not in multicast_path_min.nodes[i]['vnf']: 
-                            G_min.nodes[i]['mem_capacity'] -= 1
-                        ### data_rate 順序
-                        # If it has placed vnf, there don't need to add edge again.
-                        if place_flag != 1:
-                            if find_distance == 1:
-                                if update_shortest_path_set[dst][-1] != i:
-                                    update_shortest_path_set[dst].append(i)
-                                
-                                e = (last_node, i)
-                                # If previous_node to i don't have path then build it
-                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-1], video_type)
-                            else:   
-                                for j in range(len(shortest_path)-1):
-                                    if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
-                                        update_shortest_path_set[dst].append(shortest_path[j+1])
-                                    if j not in multicast_path_min:
-                                        multicast_path_min.add_node(shortest_path[j], vnf=[])
-                                    e = (shortest_path[j], shortest_path[j+1])
-                                    Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-1], video_type)
-
-                        isPlaceNew = Graph.add_new_vnf(G_min, multicast_path_min, update_shortest_path_set, dst, i, vnf, min_data_rate[dst][-1])
-
-                        if isReuse or isPlaceNew == True:
-                            index_sfc_min[dst]['index'] += 1
-                            index_sfc_min[dst]['place_node'].append(i)
-                            place_flag = 1
+                    # Processing data with transcoder
+                    if "t" in vnf: # This vnf is transcoder
+                        output_q = dsts[dst]
+                        update_data_rate = exp_set.cal_transcode_bitrate(min_data_rate[dst][-1][2], min_data_rate[dst][-1][1], output_q)
+                        min_data_rate[dst].append((i,output_q,update_data_rate))
+                    else:
+                        min_data_rate[dst].append((i,min_data_rate[dst][-1][1],min_data_rate[dst][-1][2])) 
+                    
+                    # If it has placed vnf, there don't need to add edge again.
+                    if place_flag != 1:
+                        # Add edge to connect node
+                        if find_distance == 1:
+                            if update_shortest_path_set[dst][-1] != i:
+                                update_shortest_path_set[dst].append(i)
                             
-                            output_q = sort_quality[index_sfc_min[dst]['index']+1]
-                            update_data_rate = exp_set.cal_transcode_bitrate(min_data_rate[dst][-1][2], min_data_rate[dst][-1][1], output_q)
-                            min_data_rate[dst].append((i,output_q,update_data_rate))
-                        else:
-                            G_min = copy.deepcopy(tmp_G_min)
-                            multicast_path_min = copy.deepcopy(tmp_multicast_path_min)
-                            update_shortest_path_set = copy.deepcopy(tmp_update_shortest_path_set)
-                            break
+                            e = (last_node, i)
+                            # If previous_node to i don't have path then build it
+                            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-2], min_data_rate)
+                        else:   
+                            for j in range(len(shortest_path)-1):
+                                if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
+                                    update_shortest_path_set[dst].append(shortest_path[j+1])
+                                if shortest_path[j] not in multicast_path_min:
+                                    multicast_path_min.add_node(shortest_path[j], vnf=[])
+                                e = (shortest_path[j], shortest_path[j+1])
+                                if j != 0:
+                                    min_data_rate[dst].insert(-2, (shortest_path[j],min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
+                                    #min_data_rate[dst].append((shortest_path[j],min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
+                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-2], min_data_rate)
+
+                    is_process_data = Graph.add_new_processing_data(G_min, multicast_path_min, update_shortest_path_set, dst, i, vnf, min_data_rate[dst][-2], min_data_rate)
+
+                    if is_process_data == True:
+                        index_sfc_min[dst]['index'] += 1
+                        index_sfc_min[dst]['place_node'].append(i)                        
+                        place_flag = 1
+                    else:
+                        G_min = copy.deepcopy(tmp_G)
+                        multicast_path_min = copy.deepcopy(tmp_path)
+                        update_shortest_path_set = copy.deepcopy(tmp_path_set)
+                        min_data_rate = copy.deepcopy(tmp_data_rate)
+                        place_flag = 2
+                        break
 
                     if index_sfc_min[dst]['index'] >= len(sfc[dst])-1: # finish sfc
                         break
                     vnf = sfc[dst][index_sfc_min[dst]['index']+1]
-                
+
                 if index_sfc_min[dst]['index'] >= len(sfc[dst])-1: # finish sfc
                     break
 
@@ -477,10 +525,11 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             if j not in multicast_path_min:
                 multicast_path_min.add_node(j, vnf=[])
             e = (last_node, j)
-            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][-1], video_type)
             update_shortest_path_set[dst].append(j)
             if j != dst:
                 min_data_rate[dst].append((j,min_data_rate[dst][-1][1],min_data_rate[dst][-1][2]))
+            index = len(update_shortest_path_set[dst]) - 2
+            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, min_data_rate[dst][index], min_data_rate)
             last_node = j
 
     # print('link to dst')
@@ -516,9 +565,9 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
     if min(list(G_min.edges[e]['bandwidth'] for e in G_min.edges())) >= 0:
         final_data_rate = copy.deepcopy(min_data_rate)
         #print('J = 1')
-        print(update_shortest_path_set)
-        print(final_data_rate)
-        print(index_sfc_min)
+        # print(update_shortest_path_set)
+        # print(final_data_rate)
+        # print(index_sfc_min)
         return (G_min, multicast_path_min)
 
     # Record all path from src to dst with its ordered nodes
@@ -553,7 +602,8 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 for j in range(len(tmp_path_set)-1):
                     e = (tmp_path_set[j], tmp_path_set[j+1])
                     final_path_set[dst].append(tmp_path_set[j+1])
-                    Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][last_vnf_node_index], video_type)
+                    
+                    Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][last_vnf_node_index], min_data_rate)
                     final_data_rate[dst].append((dst_path[i], min_data_rate[dst][last_vnf_node_index][1], min_data_rate[dst][last_vnf_node_index][2]))
                 last_vnf_node_index = i+1
                 continue
@@ -597,7 +647,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
 
                         # allocate_data_rate = data_rate[1] / (j+1) # Averagely allocate data rate to each tree
                         tmp_data_rate = (tmp_path[m], data_rate[0], data_rate[1])
-                        Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, tmp_data_rate, video_type)
+                        Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, tmp_data_rate, final_data_rate)
                         final_data_rate[dst].append(tmp_data_rate)
                     
                     tmp_data_rate = (tmp_path[-1], final_data_rate[dst][-1][1], final_data_rate[dst][-1][2])
@@ -613,10 +663,10 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             
         if isRebuild == 1:
             #print("infeasible solution")
-            print(final_path_set)
-            print(final_data_rate)
-            print(index_sfc_min)
-            print('----------')
+            # print(final_path_set)
+            # print(final_data_rate)
+            # print(index_sfc_min)
+            # print('----------')
             # print(path_final.nodes(data=True))
             # print(path_final.edges(data=True))
             return (G, nx.Graph())
@@ -627,14 +677,14 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 e = (tmp_path_set[m], tmp_path_set[m+1])
                 #if m+1 != dst:
                 final_path_set[dst].append(tmp_path_set[m+1])
-                Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][-1], video_type)
+                Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][-1], min_data_rate)
                 final_data_rate[dst].append((dst_path[-2], min_data_rate[dst][-1][1], min_data_rate[dst][-1][2]))
             if final_path_set[dst][-1] != dst:
                 final_path_set[dst].append(dst)
 
     # Graph.printGraph(G_final, pos, 'G_final', service, 'bandwidth')
     # Graph.printGraph(path_final, pos, 'path_final', service, 'data_rate')
-    print(final_path_set)
-    print(final_data_rate)
-    print(index_sfc_min)
+    # print(final_path_set)
+    # print(final_data_rate)
+    # print(index_sfc_min)
     return (G_final, path_final)

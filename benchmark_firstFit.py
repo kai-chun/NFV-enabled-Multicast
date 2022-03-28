@@ -108,6 +108,8 @@ def search_multipath(G, pos, service, quality_list):
                             break
                     else:
                         break
+                if data_rate[dst][-1][0] != j:
+                    data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
 
             e = (shortest_path[i],shortest_path[i+1])
             Graph.add_new_edge(G_min, multicast_path_min, shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
@@ -191,15 +193,16 @@ def search_multipath(G, pos, service, quality_list):
                                 
                                 e = (last_node, i)
                                 # If previous_node to i don't have path then build it
-                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+                                Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                             else:
                                 for j in range(len(shortest_path)-1):
                                     if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
                                         update_shortest_path_set[dst].append(shortest_path[j+1])
                                     e = (shortest_path[j], shortest_path[j+1])
                                     if j != 0:
-                                        data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-                                    Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+                                        data_rate[dst].insert(-2, (shortest_path[j],data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                                        #data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                                    Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
 
                         place_flag = 1  
 
@@ -229,7 +232,9 @@ def search_multipath(G, pos, service, quality_list):
             update_shortest_path_set[dst].append(j)
             if j != dst:
                 data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+            
+            index = len(update_shortest_path_set[dst]) - 2
+            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][index], data_rate)
             last_node = j
     
     # print('===============')
