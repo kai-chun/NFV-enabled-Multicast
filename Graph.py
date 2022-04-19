@@ -19,8 +19,8 @@ def cal_total_cost(G):
             plac_cost += len(set(v[0][0] for v in dic['vnf']))
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
-    total_cost = trans_cost + proc_cost + plac_cost
-    return (total_cost, trans_cost, proc_cost, plac_cost)
+    total_cost = trans_cost + plac_cost + proc_cost 
+    return (total_cost, trans_cost, plac_cost, proc_cost)
 
 def cal_trans_cost(G):
     trans_cost = 0
@@ -126,21 +126,22 @@ def find_common_path_len_node(path, dst, vnf, shortest_path_set, all_data_rate):
             common_length += 1
     return common_length
 
-def find_common_path_len_node_main(dst, shortest_path_set, all_data_rate):
-    move_dst = [dst]
+def find_common_path_len_node_main(dsts, shortest_path_set, all_data_rate):
+    move_dst = dsts
     common_length = 1
+    dst = dsts[0]
     
     # Find union path of dst
     for i in range(1, len(shortest_path_set[dst])):
         common_flag = 0
         for d in shortest_path_set:
-            if len(shortest_path_set[d])-1 <= i:
+            if len(shortest_path_set[d])-1 < i:
                 move_dst.append(d)
             
             # Check if there have better quality been through the edge
             if d not in move_dst and shortest_path_set[dst][i] == shortest_path_set[d][i]:
                 # Make sure that the processing data are same (input and output data)
-                if len(all_data_rate[dst]) > i and all_data_rate[dst][i-1][1] == all_data_rate[d][i-1][1] and all_data_rate[dst][i][1] == all_data_rate[d][i][1]:
+                if len(all_data_rate[dst]) > i and len(all_data_rate[d]) > i and all_data_rate[dst][i-1][1] == all_data_rate[d][i-1][1] and all_data_rate[dst][i][1] == all_data_rate[d][i][1]:
                     common_flag = 1
                 else:
                     move_dst.append(d)
@@ -191,7 +192,7 @@ def add_new_processing_data_main(G, path, path_set, dst, index, vnf, data_rate, 
     for n in path_set[dst]:
         if n not in path.nodes:
             path.add_node(n, vnf=[])
-    commom_len = find_common_path_len_node_main(dst, path_set, all_data_rate)
+    commom_len = find_common_path_len_node_main([dst], path_set, all_data_rate)
     
     node = path_set[dst][index]
 
@@ -200,7 +201,10 @@ def add_new_processing_data_main(G, path, path_set, dst, index, vnf, data_rate, 
             G.nodes[node]['vnf'].append((vnf, data_rate[1],data_rate[2]))
             path.nodes[node]['vnf'].append((vnf, data_rate[1], data_rate[2]))
             G.nodes[node]['com_capacity'] -= data_rate[2]
+            G.nodes[node]['share_num'] += 1
             return True
         else:
             return False
+    
+    G.nodes[node]['share_num'] += 1
     return True
