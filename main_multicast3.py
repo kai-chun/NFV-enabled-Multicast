@@ -9,6 +9,10 @@
 對這兩個組找最好的品質，並對這兩個組的上游找可以放轉碼器的部分
 '''
 
+### 成本計算為 s-x-a
+### 用 cost_metric 紀錄當下節省最多成本的合併策略，並合併
+### 將 sfc 更新合併，例如： [('t_01,6,1), ('t_12',6,1)] -> ('t_02',6,1)
+
 import copy
 import networkx as nx
 
@@ -110,6 +114,8 @@ def search_multipath(G, service, quality_list):
                     vnf_find = vnf
                     if vnf[0] == 't':
                         vnf_find = "t"
+                    
+                    is_place = False
 
                     # There is vnf instance on node j
                     if vnf_find in list(v[0][0] for v in G_min.nodes[j]['vnf']):
@@ -127,15 +133,14 @@ def search_multipath(G, service, quality_list):
                             index_sfc[dst]['index'] += 1
                             index_sfc[dst]['place_node'].append(j)
                             index_sfc[dst]['place_id'].append(i)
-                            continue # A node place one vnf, if successfully placing vnf on node, then go to next node.
+                            is_place = True # A node place one vnf, if successfully placing vnf on node, then go to next node.
                         else: 
                             # Because compute capacity not enough, can't processing data.
                             data_rate[dst].pop(-1)
                             data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-                            continue
 
                     # Check if the node has enough resource to place instance
-                    if G_min.nodes[j]['mem_capacity'] > 0: # memory capacity
+                    if is_place == False and G_min.nodes[j]['mem_capacity'] > 0: # memory capacity
                         # add new vnf instance
                         is_initialize = False
                         if vnf_find not in list(v[0][0] for v in G_min.nodes[j]['vnf']): 
@@ -454,17 +459,11 @@ def merge_path(G_min, quality_list, group_info):
     for vnf_id in range(max_sfc_len):
         # print("=========== vnf_id = ", vnf_id, " ===========")
         is_finish = False
-        count = 0
+
         while is_finish == False:
             path_set = new_group_info[0]
             sfc = new_group_info[1]
-            data_rate = new_group_info[2]
-            # print("------ count = ", count, " ------")
-            # print(path_set)
-            # print(sfc)
-            # print(data_rate)
-            # print('-----------')
-            count += 1
+            
             cost_metric = dict()
             for i in range(len(reverse_sort)):
                 dst1 = reverse_sort[i][0]
@@ -516,7 +515,6 @@ def merge_path(G_min, quality_list, group_info):
                                     merge_cost = total_cost
                                     merge_node = m
                 
-                            # print('------------ ', dst2, ' -------------')
                             dst1_info = [dst1, last_node_id_dst1, merge_node, next_node_id_dst1]
                             dst2_info = [dst2, last_node_id_dst2, merge_node, next_node_id_dst2]
                             cost_metric[(dst1,dst2)] = (round(orig_cost - merge_cost, 2), merge_node, dst1_info, dst2_info)
@@ -548,6 +546,8 @@ def merge_path(G_min, quality_list, group_info):
     path_set = new_group_info[0]
     sfc = new_group_info[1]
     data_rate = new_group_info[2]
+
+    # print(path_set)
 
     ### Update the path between last VNF and dst.
     for d in reverse_sort:
@@ -720,28 +720,37 @@ def merge_group_info(G_min, dst1_info, dst2_info, vnf_id, group_info, video_type
     shortest_path_before_dst2 = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst2_info[0]][dst2_info[1]], place_node, weight='weight')
     shortest_path_after_dst2 = nx.algorithms.shortest_paths.dijkstra_path(G_min, place_node, path_set[dst2_info[0]][dst2_info[3]], weight='weight')[1:]
 
-    print("------- update_group_info -------")
-    print('======= dst1 ========')
-    print(shortest_path_before_dst1)
-    print(shortest_path_after_dst1)
-    print('======= dst2 ========')
-    print(shortest_path_before_dst2)
-    print(shortest_path_after_dst2)
+    
+    # print("------- update_group_info -------")
+    # print("vnf_id = ", vnf_id)
+    # print('======= dst1 ', dst1_info[0],'========')
+    # print(path_set[dst1_info[0]], sfc[dst1_info[0]])
+    # print(shortest_path_before_dst1)
+    # print(shortest_path_after_dst1)
+    # print('======= dst2 ', dst2_info[0],'========')
+    # print(path_set[dst2_info[0]], sfc[dst2_info[0]])
+    # print(shortest_path_before_dst2)
+    # print(shortest_path_after_dst2)
+    # print()
 
     # path_set
     new_path_set = copy.deepcopy(path_set)
 
     if dst1_info[3] == -1:
-        shortest_path_after_dst1.append(dst1_info[0])
+        # shortest_path_after_dst1.append(dst1_info[0])
         new_path_set[dst1_info[0]][dst1_info[1]:] = shortest_path_before_dst1 + shortest_path_after_dst1
     else:
         new_path_set[dst1_info[0]][dst1_info[1]:dst1_info[3]+1] = shortest_path_before_dst1 + shortest_path_after_dst1
 
     if dst2_info[3] == -1:
-        shortest_path_after_dst2.append(dst2_info[0])
+        # shortest_path_after_dst2.append(dst2_info[0])
         new_path_set[dst2_info[0]][dst2_info[1]:] = shortest_path_before_dst2 + shortest_path_after_dst2
     else:
         new_path_set[dst2_info[0]][dst2_info[1]:dst2_info[3]+1] = shortest_path_before_dst2 + shortest_path_after_dst2
+
+    # data_rate
+    new_data_rate = update_data_rate(dst1_info, shortest_path_before_dst1, shortest_path_after_dst1, vnf_id, all_data_rate, sfc, video_type)
+    new_data_rate = update_data_rate(dst2_info, shortest_path_before_dst2, shortest_path_after_dst2, vnf_id, new_data_rate, sfc, video_type)
 
     # sfc
     new_sfc = copy.deepcopy(sfc)
@@ -751,28 +760,27 @@ def merge_group_info(G_min, dst1_info, dst2_info, vnf_id, group_info, video_type
     new_sfc[dst1_info[0]][vnf_id] = [sfc[dst1_info[0]][vnf_id][0], place_node, place_node_id_dst1]
     if vnf_id+1 < len(sfc[dst1_info[0]]):
         new_sfc[dst1_info[0]][vnf_id+1][2] = place_node_id_dst1 + len(shortest_path_after_dst1) + 1
+        if len(shortest_path_after_dst1) <= 1:
+            new_sfc[dst1_info[0]][vnf_id+1][2] = new_sfc[dst1_info[0]][vnf_id][2] + (sfc[dst1_info[0]][vnf_id+1][2] - sfc[dst1_info[0]][vnf_id][2]) + len(shortest_path_after_dst1)
+   
     for f in range(vnf_id+2,len(sfc[dst1_info[0]])):
         new_sfc[dst1_info[0]][f][2] = new_sfc[dst1_info[0]][f-1][2] + (sfc[dst1_info[0]][f][2] - sfc[dst1_info[0]][f-1][2])
     
     new_sfc[dst2_info[0]][vnf_id] = [sfc[dst2_info[0]][vnf_id][0], place_node, place_node_id_dst2]
     if vnf_id+1 < len(sfc[dst2_info[0]]):
         new_sfc[dst2_info[0]][vnf_id+1][2] = place_node_id_dst2 + len(shortest_path_after_dst2) + 1
+        if len(shortest_path_after_dst2) <= 1:
+            new_sfc[dst2_info[0]][vnf_id+1][2] = new_sfc[dst2_info[0]][vnf_id][2] + (sfc[dst2_info[0]][vnf_id+1][2] - sfc[dst2_info[0]][vnf_id][2]) + len(shortest_path_after_dst2)
+
     for f in range(vnf_id+2,len(sfc[dst2_info[0]])):
         new_sfc[dst2_info[0]][f][2] = new_sfc[dst2_info[0]][f-1][2] + (sfc[dst2_info[0]][f][2] - sfc[dst2_info[0]][f-1][2])
-
-    # new_sfc = update_sfc(dst1_info[0], new_sfc)
-    # new_sfc = update_sfc(dst2_info[0], new_sfc)
-    print()
-    # data_rate
-    new_data_rate = update_data_rate(dst1_info, shortest_path_before_dst1, shortest_path_after_dst1, vnf_id, all_data_rate, new_sfc, video_type)
-    new_data_rate = update_data_rate(dst2_info, shortest_path_before_dst2, shortest_path_after_dst2, vnf_id, new_data_rate, new_sfc, video_type)
-
-
-    print('------------')
-    print(new_path_set[dst1_info[0]], new_path_set[dst2_info[0]])
-    print(new_sfc[dst1_info[0]], new_sfc[dst2_info[0]])
-    print(new_data_rate[dst1_info[0]], new_data_rate[dst2_info[0]])
-    print('-------------------------------------!!')
+    
+    
+    # print('------------')
+    # print(new_path_set[dst1_info[0]], new_path_set[dst2_info[0]])
+    # print(new_sfc[dst1_info[0]], new_sfc[dst2_info[0]])
+    # print(new_data_rate[dst1_info[0]], "\n", new_data_rate[dst2_info[0]])
+    # print('-------------------------------------!!')
 
     return [new_path_set, new_sfc, new_data_rate]
 
@@ -785,7 +793,9 @@ def update_data_rate(dst_info, shortest_path_before, shortest_path_after, vnf_id
 
     new_data_rate = copy.deepcopy(data_rate)
 
-    input_data = data_rate[dst][sfc[dst][vnf_id][2]][2]
+    # print(sfc[dst][vnf_id][2]-1, data_rate[dst])
+
+    input_data = data_rate[dst][sfc[dst][vnf_id][2]-1][2]
     output_data = data_rate[dst][sfc[dst][vnf_id][2]][2]
     # print(dst)
     
@@ -797,10 +807,10 @@ def update_data_rate(dst_info, shortest_path_before, shortest_path_after, vnf_id
     input_q = video_type[int(sfc[dst][vnf_id][0][-2])]
     output_q = video_type[int(sfc[dst][vnf_id][0][-1])]
 
-    print("input: ", input_data, input_q, ", output: ", output_data, output_q)
-    print(vnf_id, sfc[dst])
-    print(shortest_path_before)
-    print(shortest_path_after)
+    # print("input: ", input_data, input_q, ", output: ", output_data, output_q)
+    # print(vnf_id, sfc[dst])
+    # print(shortest_path_before)
+    # print(shortest_path_after)
 
     for n in shortest_path_before:
         if n == shortest_path_before[-1]:
@@ -811,10 +821,12 @@ def update_data_rate(dst_info, shortest_path_before, shortest_path_after, vnf_id
     new_data_rate[dst].insert(last_node_id, (dst_info[2], output_q, output_data))
     last_node_id += 1
     for n in shortest_path_after:
+        if next_node_id == -1 and n == shortest_path_after[-1]: 
+            break
         new_data_rate[dst].insert(last_node_id, (n, output_q, output_data))
         last_node_id += 1
     
-    print(new_data_rate[dst])
+    # print(new_data_rate[dst])
 
     return new_data_rate
 
@@ -848,9 +860,6 @@ def update_group_info(G_min, dst, group_info, video_type):
     data_rate = group_info[2]
 
     new_sfc = update_sfc(dst, sfc)
-            
-    print("------ ", dst, " -------")
-    print(new_sfc[dst])
 
     last_vnf = new_sfc[dst][-1][1]
     last_vnf_id = new_sfc[dst][-1][2]
@@ -860,27 +869,30 @@ def update_group_info(G_min, dst, group_info, video_type):
 
     shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_vnf, dst, weight='weight')
 
-    if len(shortest_path) < len(path_set[dst][last_vnf_id:]):
-        print(path_set[dst][last_vnf_id:])
-        print(shortest_path)
-        print(data_rate[dst])
+    # if len(shortest_path) < len(path_set[dst][last_vnf_id:]):
+    #     print(dst, "--- new final path ---")
+    #     print(path_set[dst])
+    #     print(shortest_path)
+    #     print(new_sfc[dst])
+    #     print(data_rate[dst])
+    #     print(last_vnf, last_vnf_id)
 
-        new_path_set[dst][last_vnf_id:] = shortest_path
+    #     new_path_set[dst][last_vnf_id:] = shortest_path
+    #     print(new_path_set[dst])
 
-        input_q = video_type[int(sfc[dst][-1][0][-2])]
-        output_q = video_type[int(sfc[dst][-1][0][-1])]
-        print("input : ", input_q, ", output: ", output_q)
-        print(data_rate[dst][last_vnf_id-1][2])
-        output_data = exp_set.cal_transcode_bitrate(data_rate[dst][last_vnf_id-1][2], input_q, output_q)
-        del new_data_rate[dst][last_vnf_id:]
-        for n in shortest_path:
-            if n == shortest_path[-1]: break
-            new_data_rate[dst].append((n, output_q, output_data))
+    #     input_q = video_type[int(sfc[dst][-1][0][-2])]
+    #     output_q = video_type[int(sfc[dst][-1][0][-1])]
+    #     # print("input : ", input_q, ", output: ", output_q)
+    #     # print(data_rate[dst][last_vnf_id-1][2])
+    #     output_data = exp_set.cal_transcode_bitrate(data_rate[dst][last_vnf_id-1][2], input_q, output_q)
+    #     del new_data_rate[dst][last_vnf_id:]
+    #     for n in shortest_path:
+    #         new_data_rate[dst].append((n, output_q, output_data))
 
-        print(new_path_set[dst])
-        print(new_data_rate[dst])
+    #     print(new_path_set[dst])
+    #     print(new_data_rate[dst])
 
-    return [new_path_set, sfc, new_data_rate]
+    return [new_path_set, new_sfc, new_data_rate]
 
 # Use new_path_info to create new path on G.
 def update_graph(G, new_path_info, sort_dsts):
@@ -888,12 +900,12 @@ def update_graph(G, new_path_info, sort_dsts):
     sfc = new_path_info[1]
     data_rate = new_path_info[2]
     
-    print('=============')
-    print(sort_dsts)
-    print(path_set)
-    print(sfc)
-    print(data_rate)
-    print('=============')
+    # print('=============')
+    # print(sort_dsts)
+    # print(path_set)
+    # print(sfc)
+    # print(data_rate)
+    # print('=============')
 
     G_min = copy.deepcopy(G)
     multicast_path = nx.Graph()

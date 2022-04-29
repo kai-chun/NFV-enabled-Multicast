@@ -10,6 +10,10 @@ import grouping
 import benchmark_unicast
 import benchmark_JPR
 import benchmark_firstFit
+import main_multicast5
+import main_multicast4
+import main_multicast3
+import main_multicast2
 import main_multicast
 
 '''
@@ -33,6 +37,9 @@ def main():
     exp_factor = dst_ratio
     add_factor = 0.1
     bound_factor = 0.6
+
+    # cost weight: transimission, processing, placing
+    weight = (0.6, 0.4, 1)
    
     dst_num = int(np.ceil(node_num * dst_ratio))
     vnf_num = random.randint(1,1)
@@ -114,8 +121,8 @@ def main():
             G_main_all = list()
 
             # Find multicast path for all groups
-            for i in group_list:
-                group = group_list[i]
+            for j in group_list:
+                group = group_list[j]
                 group_info = dict()
                 sfc = dict()
                 for g in group:
@@ -129,43 +136,44 @@ def main():
                 service_firstFit = copy.deepcopy(service_unicast)
                 service_main = copy.deepcopy(service_unicast)
                 
-                #G_unicast_ans = benchmark_unicast.search_unicast_path(G_unicast, pos, service_unicast, quality_list)
-                #print('G_unicast', end=' ')
-                #G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
-                #print('G_JPR', end=' ')
-                #G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
-                #print('G_JPR_notReuse', end=' ')
-                #G_firstFit_ans = benchmark_firstFit.search_multipath(G_firstFit, pos, service_firstFit, quality_list)
-                #print('firstFit', end=' ')
-                G_main_ans = main_multicast.search_multipath(G_main, service_main, quality_list)
+                G_unicast_ans = benchmark_unicast.search_unicast_path(G_unicast, pos, service_unicast, quality_list)
+                # print('G_unicast', end=' ')
+                G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
+                # print('G_JPR', end=' ')
+                G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
+                # print('G_JPR_notReuse', end=' ')
+                G_firstFit_ans = benchmark_firstFit.search_multipath(G_firstFit, pos, service_firstFit, quality_list)
+                # print('firstFit', end=' ')
+                G_main_ans = main_multicast5.search_multipath(G_main, service_main, quality_list)
                 G_main_all.append(G_main_ans)
 
-                # G_unicast = copy.deepcopy(G_unicast_ans[0])
-                # G_JPR = copy.deepcopy(G_JPR_ans[0])
-                # G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
-                # G_firstFit = copy.deepcopy(G_firstFit_ans[0])
+                G_unicast = copy.deepcopy(G_unicast_ans[0])
+                G_JPR = copy.deepcopy(G_JPR_ans[0])
+                G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
+                G_firstFit = copy.deepcopy(G_firstFit_ans[0])
                 G_main = copy.deepcopy(G_main_ans[0])
 
-                # if nx.classes.function.is_empty(G_unicast_ans[1]):
-                #     failed_num_unicast += len(group)
-                # if nx.classes.function.is_empty(G_JPR_ans[1]):
-                #     failed_num_JPR += len(group)
-                # if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
-                #     failed_num_JPR_notReuse += len(group)
-                # if nx.classes.function.is_empty(G_firstFit_ans[1]):
-                #     failed_num_firstFit+= len(group)
+                if nx.classes.function.is_empty(G_unicast_ans[1]):
+                    failed_num_unicast += len(group)
+                if nx.classes.function.is_empty(G_JPR_ans[1]):
+                    failed_num_JPR += len(group)
+                if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
+                    failed_num_JPR_notReuse += len(group)
+                if nx.classes.function.is_empty(G_firstFit_ans[1]):
+                    failed_num_firstFit+= len(group)
                 failed_num_main += len(G_main_ans[-1])
                 
-                #print("group", i," : ", Graph.cal_total_cost(G_main)) 
+                #print("group", j," : ", Graph.cal_total_cost(G_main)) 
             
-            G_merge = main_multicast.merge_group(G_original, G_main, src, quality_list, G_main_all)
-            print("merge: ", Graph.cal_total_cost(G_merge))
+            # print("main: ", Graph.cal_total_cost(G_main, weight))
+            G_merge = main_multicast5.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
+            # print("merge: ", Graph.cal_total_cost(G_merge, weight))
 
-            cost_tuple_unicast = Graph.cal_total_cost(G_unicast)
-            cost_tuple_JPR = Graph.cal_total_cost(G_JPR)
-            cost_tuple_notReuse = Graph.cal_total_cost(G_JPR_notReuse)
-            cost_tuple_firstFit = Graph.cal_total_cost(G_firstFit)
-            cost_tuple_main = Graph.cal_total_cost(G_main)
+            cost_tuple_unicast = Graph.cal_total_cost(G_unicast, weight)
+            cost_tuple_JPR = Graph.cal_total_cost(G_JPR, weight)
+            cost_tuple_notReuse = Graph.cal_total_cost(G_JPR_notReuse, weight)
+            cost_tuple_firstFit = Graph.cal_total_cost(G_firstFit, weight)
+            cost_tuple_main = Graph.cal_total_cost(G_merge, weight)
             
             #print(cost_tuple_notReuse)
             #print(G_JPR_notReuse_ans[1].edges(data=True))
@@ -327,6 +335,69 @@ def main():
         plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = 1')
         plt.tight_layout()
         plt.savefig('exp_img/avg_cost_'+str(exp_num)+'.png')
+    
+    plt.close()
+
+    ### Print data: transition cost.
+    plt.plot(times, exp_data_unicast[1], ':', color="#2ca02c")
+    plt.plot(times, exp_data_JPR[1], color="#1f77b4")
+    plt.plot(times, exp_data_JPR_notReuse[1], color="#ff7f0e")
+    plt.plot(times, exp_data_firstFit[1], '--', color="#9467bd")
+    plt.plot(times, exp_data_main[1], color="#e377c2")
+    plt.legend(['Unicast','JPR','JPR_notReue','FirstFit','Main'], loc="lower right")
+    plt.xlabel("Dst Ratio")
+    plt.ylabel("Transmission Cost")
+    
+    if is_group == 1:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = n')
+        plt.tight_layout() 
+        plt.savefig('exp_img/tran_cost_'+str(exp_num)+'_k.png')
+    else:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = 1')
+        plt.tight_layout()
+        plt.savefig('exp_img/tran_cost_'+str(exp_num)+'.png')
+    
+    plt.close()
+
+    ### Print data: processing cost.
+    plt.plot(times, exp_data_unicast[2], ':', color="#2ca02c")
+    plt.plot(times, exp_data_JPR[2], color="#1f77b4")
+    plt.plot(times, exp_data_JPR_notReuse[2], color="#ff7f0e")
+    plt.plot(times, exp_data_firstFit[2], '--', color="#9467bd")
+    plt.plot(times, exp_data_main[2], color="#e377c2")
+    plt.legend(['Unicast','JPR','JPR_notReue','FirstFit','Main'], loc="lower right")
+    plt.xlabel("Dst Ratio")
+    plt.ylabel("Processing Cost")
+    
+    if is_group == 1:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = n')
+        plt.tight_layout() 
+        plt.savefig('exp_img/proc_cost_'+str(exp_num)+'_k.png')
+    else:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = 1')
+        plt.tight_layout()
+        plt.savefig('exp_img/proc_cost_'+str(exp_num)+'.png')
+    
+    plt.close()
+
+    ### Print data: placing cost.
+    plt.plot(times, exp_data_unicast[3], ':', color="#2ca02c")
+    plt.plot(times, exp_data_JPR[3], color="#1f77b4")
+    plt.plot(times, exp_data_JPR_notReuse[3], color="#ff7f0e")
+    plt.plot(times, exp_data_firstFit[3], '--', color="#9467bd")
+    plt.plot(times, exp_data_main[3], color="#e377c2")
+    plt.legend(['Unicast','JPR','JPR_notReue','FirstFit','Main'], loc="lower right")
+    plt.xlabel("Dst Ratio")
+    plt.ylabel("Placing Cost")
+    
+    if is_group == 1:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = n')
+        plt.tight_layout() 
+        plt.savefig('exp_img/plac_cost_'+str(exp_num)+'_k.png')
+    else:
+        plt.title('Graph ('+str(len(input_graph[0].nodes))+', '+str(len(input_graph[0].edges))+'), k = 1')
+        plt.tight_layout()
+        plt.savefig('exp_img/plac_cost_'+str(exp_num)+'.png')
     
     plt.close()
     

@@ -60,7 +60,7 @@ def search_unicast_path(G, pos, service, quality_list):
     # Find shortest path
     for d in sort_dsts:
         dst = d[0]
-        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, src, dst, weight='data_rate')
+        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, src, dst, weight='weight')
         shortest_path_set[dst] = [src]
 
         # Update nodes of tmp_unicast_path with nodes of shortest_path
@@ -210,7 +210,7 @@ def search_unicast_path(G, pos, service, quality_list):
                     continue
 
                 last_node = update_shortest_path_set[dst][-1]
-                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='data_rate')
+                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='weight')
                 
                 vnf = sfc[dst][index_sfc[dst]['index']+1]
                 if i == last_node or i == src or i == dst:
@@ -274,7 +274,7 @@ def search_unicast_path(G, pos, service, quality_list):
         if dst not in missing_vnf_dsts:
             continue
         last_node = update_shortest_path_set[dst][-1]
-        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='data_rate')
+        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
         
         for i,j in enumerate(shortest_path):
             if i == 0:

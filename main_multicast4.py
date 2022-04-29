@@ -9,11 +9,11 @@
 對這兩個組找最好的品質，並對這兩個組的上游找可以放轉碼器的部分
 '''
 
-### 每次找最小成本就更新
+### 成本計算改為只算 s-x
+### 用 cost_metric 紀錄當下節省最多成本的合併策略，並合併
+### 合併路徑時，移動後方 VNF 部署位置
 
 import copy
-from operator import index
-import sys
 import networkx as nx
 
 import Graph
@@ -76,11 +76,12 @@ def search_multipath(G, service, quality_list):
         dst = d[0]
         
         # Build auxiliary graph of enough transimission, placement resources.
+        G_tmp = copy.deepcopy(G_min)
         remove_edges = list((n1,n2) for n1,n2,dic in G_min.edges(data=True) if dic['bandwidth'] < source_data_size)
-        G_min.remove_edges_from(remove_edges)
+        G_tmp.remove_edges_from(remove_edges)
 
         try:
-            shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, src, dst, weight='data_rate')
+            shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_tmp, src, dst, weight='weight')
         except nx.NetworkXNoPath:
             failed_dsts.append(d)
             sort_dsts.remove(d)
@@ -114,6 +115,8 @@ def search_multipath(G, service, quality_list):
                     if vnf[0] == 't':
                         vnf_find = "t"
 
+                    is_place = False
+
                     # There is vnf instance on node j
                     if vnf_find in list(v[0][0] for v in G_min.nodes[j]['vnf']):
                         # Processing data with transcoder
@@ -130,16 +133,14 @@ def search_multipath(G, service, quality_list):
                             index_sfc[dst]['index'] += 1
                             index_sfc[dst]['place_node'].append(j)
                             index_sfc[dst]['place_id'].append(i)
-                            G_min.nodes[j]['share_num'] += 1
-                            continue # A node place one vnf, if successfully placing vnf on node, then go to next node.
+                            is_place = True # A node place one vnf, if successfully placing vnf on node, then go to next node.
                         else: 
                             # Because compute capacity not enough, can't processing data.
                             data_rate[dst].pop(-1)
                             data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
-                            continue
 
                     # Check if the node has enough resource to place instance
-                    if G_min.nodes[j]['mem_capacity'] > 0: # memory capacity
+                    if is_place == False and G_min.nodes[j]['mem_capacity'] > 0: # memory capacity
                         # add new vnf instance
                         is_initialize = False
                         if vnf_find not in list(v[0][0] for v in G_min.nodes[j]['vnf']): 
@@ -160,7 +161,6 @@ def search_multipath(G, service, quality_list):
                             index_sfc[dst]['index'] += 1
                             index_sfc[dst]['place_node'].append(j)
                             index_sfc[dst]['place_id'].append(i)
-                            G_min.nodes[j]['share_num'] += 1
                         else:
                             # Because compute capacity not enough, can't processing data.
                             data_rate[dst].pop(-1)
@@ -223,7 +223,7 @@ def search_multipath(G, service, quality_list):
                     continue
 
                 last_node = update_shortest_path_set[dst][-1]
-                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='data_rate')
+                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='weight')
                 
                 vnf = sfc[dst][index_sfc[dst]['index']+1]
                 vnf_find = vnf
@@ -277,7 +277,6 @@ def search_multipath(G, service, quality_list):
                         index_sfc[dst]['place_node'].append(i)
                         index_sfc[dst]['place_id'].append(len(update_shortest_path_set[dst])-1)
                         place_flag = 1
-                        G_min.nodes[j]['share_num'] += 1
                     else:
                         G_min = copy.deepcopy(tmp_G)
                         multicast_path_min = copy.deepcopy(tmp_path)
@@ -346,7 +345,6 @@ def search_multipath(G, service, quality_list):
                         index_sfc[dst]['place_node'].append(i)
                         index_sfc[dst]['place_id'].append(len(update_shortest_path_set[dst])-1)                      
                         place_flag = 1
-                        G_min.nodes[j]['share_num'] += 1
                     else:
                         G_min = copy.deepcopy(tmp_G)
                         multicast_path_min = copy.deepcopy(tmp_path)
@@ -371,7 +369,7 @@ def search_multipath(G, service, quality_list):
         if dst not in missing_vnf_dsts:
             continue
         last_node = update_shortest_path_set[dst][-1]
-        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='data_rate')
+        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
         
         for i,j in enumerate(shortest_path):
             if i == 0:
@@ -392,6 +390,7 @@ def search_multipath(G, service, quality_list):
     # print(index_sfc)
     # print(data_rate)
     # print('===============')
+
     final_sfc = dict()
     for d in sort_dsts:
         dst = d[0]
@@ -434,183 +433,427 @@ def merge_group(G, G_min, src, quality_list, all_group_result):
 # Merge path from src to dst
 def merge_path(G_min, quality_list, group_info):
     path_set = group_info[1]
-    sfc = group_info[2]
-    data_rate = group_info[3]
     reverse_sort = group_info[4]
     reverse_sort.reverse()
-
-    # print('------------')
-    # print(path_set)
-    # print(sfc)
-    # print(data_rate)
-    # print('-----------')
 
     video_type = [q for q in quality_list]
     video_type.reverse()
     src = path_set[list(path_set)[0]][0]
 
-    ### 怎麼決定誰要跟誰併，以及所有路徑的合併結束條件為何？
-    is_merge_dsts = {}
-    for m, d in enumerate(reverse_sort):
-        main_dst = d[0]
-        if main_dst in is_merge_dsts and is_merge_dsts[main_dst] == True:
-            continue
-        is_merge_dsts[main_dst] = False
-        for i in range(m+1,len(reverse_sort)):
-            dst = reverse_sort[i][0]
+    ### 用一個矩陣記錄兩兩路徑間合併某節點的成本，選最低者
+    ### 過程中用 threshold（hop數）降低複雜度
+    new_group_info = copy.deepcopy(group_info)[1:]
+    path_set = new_group_info[0]
+    sfc = new_group_info[1]
+    data_rate = new_group_info[2]
+    path_length_threshold = 5 #len(G_min.edges)
+    
+    max_sfc_len = len(sfc[reverse_sort[0][0]])
+    print('------------')
+    print(path_set)
+    print(sfc)
+    print(data_rate)
+    print('-----------')
+    
+    ### Merge with paths of other dsts.
+    for vnf_id in range(max_sfc_len):
+        # print("=========== vnf_id = ", vnf_id, " ===========")
+        is_finish = False
+        while is_finish == False:
+            path_set = new_group_info[0]
+            sfc = new_group_info[1]
+            data_rate = new_group_info[2]
 
-            if is_merge_dsts[main_dst] == True or (dst in is_merge_dsts and is_merge_dsts[dst] == True):
+            cost_metric = dict()
+            for i in range(len(reverse_sort)):
+                dst1 = reverse_sort[i][0]
+                for j in range(i+1, len(reverse_sort)):
+                    dst2 = reverse_sort[j][0]
+
+                    if vnf_id < len(sfc[dst1]) and vnf_id < len(sfc[dst2]):
+                        shortest_path_between_vnfs = nx.algorithms.shortest_paths.dijkstra_path(G_min, sfc[dst1][vnf_id][1], sfc[dst2][vnf_id][1], weight='weight')
+                        if len(shortest_path_between_vnfs) - 2 > path_length_threshold:
+                            cost_metric[(dst1,dst2)] = (0, -1, [], [])
+                        else:
+                            last_node_id_dst1 = sfc[dst1][vnf_id-1][2]
+                            last_node_id_dst2 = sfc[dst2][vnf_id-1][2]
+
+                            if vnf_id == 0: # then last_node is src
+                                last_node_id_dst1 = 0 
+                                last_node_id_dst2 = 0
+
+                            orig_cost = cal_cost_origin(dst1, last_node_id_dst1, vnf_id, new_group_info, dst1) + cal_cost_origin(dst2, last_node_id_dst2, vnf_id, new_group_info, dst1)
+                            merge_cost = orig_cost
+                            merge_node = -1
+
+                            if vnf_id == len(sfc[dst1])-1:
+                                next_node_id_dst1 = -1
+                            else:
+                                next_node_id_dst1 = sfc[dst1][vnf_id][2]
+                            
+                            if vnf_id == len(sfc[dst2])-1:
+                                next_node_id_dst2 = -1
+                            else:
+                                next_node_id_dst2 = sfc[dst2][vnf_id][2]
+
+                            # Iterative all node between v[1] and sfc[main_dst][j][1],
+                            # calculate their cost, and get the node has minimim cost to merge two path.
+                            for m in shortest_path_between_vnfs:
+                                if m == src or m == dst1 or m == dst2 or (sfc[dst1][vnf_id][0][0] != sfc[dst2][vnf_id][0][0]):
+                                    continue
+
+                                dst1_info = [dst1, last_node_id_dst1, m, next_node_id_dst1]
+                                dst2_info = [dst2, last_node_id_dst2, m, next_node_id_dst2]
+
+                                vnf_find = sfc[dst1][vnf_id][0]
+                                if vnf_find[0] == 't':
+                                    vnf_find = "t"
+
+                                total_cost = cal_cost_merge(G_min, dst1_info, dst2_info, vnf_id, new_group_info, video_type)
+
+                                if total_cost < merge_cost:
+                                    merge_cost = total_cost
+                                    merge_node = m
+                
+                            # print('------------ ', dst2, ' -------------')
+                            dst1_info = [dst1, last_node_id_dst1, merge_node, next_node_id_dst1]
+                            dst2_info = [dst2, last_node_id_dst2, merge_node, next_node_id_dst2]
+                            cost_metric[(dst1,dst2)] = (round(orig_cost - merge_cost, 2), merge_node, dst1_info, dst2_info)
+                
+            print("cost_metric: ", cost_metric)
+            
+            # Choose the maximum save_cost (orig_cost - merge_cost) and merge the paths with merge_node.
+            if cost_metric == {}:
+                is_finish = True
+                # print("no merge")
                 break
+            merge_result = max(cost_metric, key=lambda k: cost_metric[k][0])
+            if cost_metric[merge_result][0] <= 0:
+                is_finish = True
+                # print("no merge")
+                break
+            # print(merge_result, cost_metric[merge_result])
             
-            is_merge_dsts[dst] = False
+            # print('------------')
+            # print(path_set[merge_result[0]], path_set[merge_result[1]])
+            # print(sfc[merge_result[0]], sfc[merge_result[1]])
+            # print(data_rate[merge_result[0]], data_rate[merge_result[1]])
+            # print('-----------')
 
-            # First last_node is src
-            last_node_id_main = 0 
-            last_node_id_dst = 0
-            
-            for j,v in enumerate(sfc[dst]):
-                # If the vnfs place on different node, then try to merge it.
-                if j < len(sfc[main_dst]) and v[1] != sfc[main_dst][j][1]:
-                    shortest_path_2vnf = nx.algorithms.shortest_paths.dijkstra_path(G_min, sfc[main_dst][j][1], v[1], weight='data_rate')
-    
-                    original_cost = cal_cost_origin(G_min, last_node_id_main, j, sfc[main_dst], data_rate[main_dst]) + cal_cost_origin(G_min, last_node_id_dst, j, sfc[dst], data_rate[dst])
-                    min_cost = original_cost
-                    min_node = -1
+            dst1_info = cost_metric[merge_result][2]
+            dst2_info = cost_metric[merge_result][3]
 
-                    if j < len(sfc[main_dst])-1:
-                        next_vnf_main = sfc[main_dst][j+1][1]
-                        next_vnf_main_id = sfc[main_dst][j+1][2]
-                    else:
-                        next_vnf_main = main_dst
-                        next_vnf_main_id = -1
-                    
-                    if j < len(sfc[dst])-1:
-                        next_vnf = sfc[dst][j+1][1]
-                        next_vnf_id = sfc[dst][j+1][2]
-                    else:
-                        next_vnf = dst
-                        next_vnf_id = -1
-                    
-                    # Iterative all node between v[1] and sfc[main_dst][j][1],
-                    # calculate their cost, and get the node has minimim cost to merge two path.
-                    for m in shortest_path_2vnf:
-                        if m == src or m == main_dst or m == dst:
-                            continue
-                        trans_cost_main = nx.dijkstra_path_length(G_min, path_set[main_dst][last_node_id_main], m, weight='data_rate') * data_rate[main_dst][last_node_id_main][2] + nx.dijkstra_path_length(G_min, m, next_vnf_main, weight='data_rate') * data_rate[main_dst][sfc[main_dst][j][2]][2]
-                        trans_cost_dst = nx.dijkstra_path_length(G_min, path_set[dst][last_node_id_dst], m, weight='data_rate') * data_rate[dst][last_node_id_dst][2] + nx.dijkstra_path_length(G_min, m, next_vnf, weight='data_rate') * data_rate[dst][v[2]][2]
+            new_group_info = merge_group_info(G_min, dst1_info, dst2_info, vnf_id, new_group_info, video_type)
+        break
+    path_set = new_group_info[0]
+    sfc = new_group_info[1]
+    data_rate = new_group_info[2]
 
-                        vnf_find = v[0]
-                        if vnf_find[0] == 't':
-                            vnf_find = "t"
+    # print(path_set)
 
-                        total_cost = trans_cost_main + trans_cost_dst + data_rate[main_dst][last_node_id_main][2] + data_rate[dst][last_node_id_dst][2]
-                        
-                        # There aren't vnf instance on node i
-                        if vnf_find not in list(x[0][0] for x in G_min.nodes[m]['vnf']):
-                            total_cost += 1
+    ### Update the path between last VNF and dst.
+    for d in reverse_sort:
+        dst = d[0]
+        
+        if len(sfc[dst]) == 0: continue
 
-                        if total_cost < min_cost:
-                            min_cost = total_cost
-                            min_node = m
+        new_group_info = update_group_info(G_min, dst, new_group_info, video_type)
 
-                    # Merge path and update information 
-                    if min_node != -1:
-                        is_merge_dsts[main_dst] = True
-                        is_merge_dsts[dst] = True
-                        # Update main_dst
-                        new_path_main_before = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[main_dst][last_node_id_main], min_node, weight='data_rate')[:-1]
-                        new_path_main_after = nx.algorithms.shortest_paths.dijkstra_path(G_min, min_node, next_vnf_main, weight='data_rate')[:-1]
-                        if next_vnf_main_id == -1:
-                            new_path_main_after.append(main_dst)
-                            path_set[main_dst][last_node_id_main:] = new_path_main_before + new_path_main_after
-                        else:
-                            path_set[main_dst][last_node_id_main:next_vnf_main_id] = new_path_main_before + new_path_main_after
-                            G_min.nodes[sfc[main_dst][j][1]]['share_num'] -= 1
-                            G_min.nodes[min_node]['share_num'] += 1
 
-                        input_data = data_rate[main_dst][last_node_id_main][2]
-                        output_data = data_rate[main_dst][sfc[main_dst][j][2]][2]
-                        if next_vnf_main_id == -1:
-                            del data_rate[main_dst][last_node_id_main:]
-                        else:
-                            del data_rate[main_dst][last_node_id_main:next_vnf_main_id]
-                        for n in new_path_main_before:
-                            data_rate[main_dst].insert(last_node_id_main, (n, video_type[int(sfc[main_dst][j][0][-2])], input_data))
-                            last_node_id_main += 1
+    ### Merge with VNFs of itself.
+    # for d in reverse_sort:
+    #     dst = d[0]
+    #     for vnf_id in range(len(sfc[dst])-1,-1,-1):
 
-                        sfc[main_dst][j] = [sfc[main_dst][j][0], min_node, last_node_id_main]
-                        for f in range(j+1,len(sfc[main_dst])):
-                            tmp_index = len(new_path_main_after) + last_node_id_main + (f - j) - 1
-                            if path_set[main_dst][tmp_index] != sfc[main_dst][f][1]:
-                                sfc[main_dst][f][2] = path_set[main_dst].index(sfc[main_dst][f][1], sfc[main_dst][f-1][2])
-                            else:
-                                sfc[main_dst][f][2] = tmp_index
-
-                        for n in new_path_main_after:
-                            data_rate[main_dst].insert(last_node_id_main, (n, video_type[int(sfc[main_dst][j][0][-1])], output_data))
-                            last_node_id_main += 1
-
-                        # Update dst
-                        new_path_dst_before = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst][last_node_id_dst], min_node, weight='data_rate')[:-1]
-                        new_path_dst_after = nx.algorithms.shortest_paths.dijkstra_path(G_min, min_node, next_vnf, weight='data_rate')[:-1]
-
-                        if next_vnf_id == -1:
-                            new_path_dst_after.append(dst)
-                            path_set[dst][last_node_id_dst:] = new_path_dst_before + new_path_dst_after
-                        else:
-                            path_set[dst][last_node_id_dst:next_vnf_id] = new_path_dst_before + new_path_dst_after
-                            G_min.nodes[sfc[dst][j][1]]['share_num'] -= 1
-                            G_min.nodes[min_node]['share_num'] += 1
-
-                        input_data = data_rate[dst][last_node_id_dst][2]
-                        output_data = data_rate[dst][v[2]][2]
-                        if next_vnf_id == -1:
-                            del data_rate[dst][last_node_id_dst:]
-                        else:
-                            del data_rate[dst][last_node_id_dst:next_vnf_id]
-                        for n in new_path_dst_before:
-                            data_rate[dst].insert(last_node_id_dst, (n, video_type[int(sfc[dst][j][0][-2])], input_data))
-                            last_node_id_dst += 1
-
-                        sfc[dst][j] = [sfc[dst][j][0], min_node, last_node_id_dst]
-                        for f in range(j+1,len(sfc[dst])):
-                            tmp_index = len(new_path_dst_after) + last_node_id_dst + (f - j) - 1
-                            if path_set[dst][tmp_index] != sfc[dst][f][1]:
-                                sfc[dst][f][2] = path_set[dst].index(sfc[dst][f][1], sfc[dst][f-1][2])
-                            else:
-                                sfc[dst][f][2] = tmp_index
-
-                        for n in new_path_dst_after:
-                            data_rate[dst].insert(last_node_id_dst, (n, video_type[int(sfc[dst][j][0][-1])], output_data))
-                            last_node_id_dst += 1
-
-                    last_node_id_main = sfc[main_dst][j][2]
-                    last_node_id_dst = sfc[dst][j][2]
-    
-    return (path_set, sfc, data_rate)
+    return new_group_info
 
 # Calculate total cost from src_vnf to dst_vnf.
-def cal_cost_origin(G_min, last_node_id, index, vnf_info, data_rate):
-    if index < len(vnf_info)-1:
-        dst_vnf_id = vnf_info[index+1][2]
+def cal_cost_origin(dst, last_node_id, index, group_info, another_dst):
+    path_set = group_info[0]
+    sfc = group_info[1]
+    all_data_rate = group_info[2]
+
+    vnf_info = group_info[1][dst]
+    data_rate = all_data_rate[dst]
+
+    if index <= len(vnf_info)-1:
+        dst_vnf_id = vnf_info[index][2]
     else:
         dst_vnf_id = len(data_rate)
+
+    place_node = path_set[dst][dst_vnf_id]
     
     # Transimission cost
     trans_cost = 0
-    for i in range(last_node_id,dst_vnf_id):
-        trans_cost += data_rate[i][2]
+    commom_len = Graph.find_common_path_len_edge(dst, path_set, all_data_rate) 
+    if dst_vnf_id >= commom_len: # If not multicast link
+        max_len = max(commom_len-1, last_node_id)
+        trans_cost += data_rate[last_node_id][2] * (dst_vnf_id - max_len)
+    
+    # Placing cost
+    place_cost = 1
+    if place_node == dst:
+        place_cost = 0
+    else:
+        for d in sfc:
+            if place_cost == 0: break
+            for v in sfc[d]:
+                if d != dst and d != another_dst and v[1] == place_node:
+                    place_cost = 0
+                    break
+                if (d == dst or d == another_dst) and v[1] == place_node and v[2] != dst_vnf_id:
+                    place_cost = 0
+                    break
+
+    # Processing cost
+    proc_cost = 0
+    commom_len = Graph.find_common_path_len_node_main([dst, another_dst], path_set, all_data_rate)
+    if dst_vnf_id >= commom_len and place_node != dst:
+        proc_cost = data_rate[last_node_id][2]
+    
+    # print(dst, "orig cost = ",trans_cost, place_cost, proc_cost)
+    return trans_cost + place_cost + proc_cost
+        
+# Calculate total cost from src_vnf to dst_vnf.
+# dst_info = [dst, last_node_id_dst, place_node, next_node_id_dst]
+def cal_cost_merge(G_min, dst1_info, dst2_info, vnf_id, group_info, video_type):
+    path_set = group_info[0]
+    sfc = group_info[1]
+    all_data_rate = group_info[2]
+
+    place_node = dst1_info[2]
+
+    # print("\nplace node = ", dst1_info[2])
+    # print('--- ', dst1_info[0], ' ---')
+    # print(path_set[dst1_info[0]])
+    # print(all_data_rate[dst1_info[0]])
+    # print('--- ', dst2_info[0], ' ---')
+    # print(path_set[dst2_info[0]])
+    # print(all_data_rate[dst2_info[0]])
+    
+    # Transimission cost - dst1, before place_node
+    trans_cost = 0
+
+    tmp_path_set = copy.deepcopy(path_set)
+    
+    shortest_path_before_dst1 = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst1_info[0]][dst1_info[1]], place_node, weight='weight')
+    shortest_path_before_dst2 = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst2_info[0]][dst2_info[1]], place_node, weight='weight')
+
+    tmp_path_set[dst1_info[0]][dst1_info[1]:] = shortest_path_before_dst1
+    tmp_path_set[dst2_info[0]][dst2_info[1]:] = []
+    tmp_data_rate = update_data_rate(dst1_info, shortest_path_before_dst1, [], vnf_id, all_data_rate, sfc, video_type)
+    tmp_data_rate = update_data_rate(dst2_info, shortest_path_before_dst2, [], vnf_id, tmp_data_rate, sfc, video_type)
+
+    place_node_id_dst1 = len(tmp_path_set[dst1_info[0]]) - 1
+    commom_len_dst1 = Graph.find_common_path_len_edge(dst1_info[0], tmp_path_set, tmp_data_rate) 
+    if place_node_id_dst1 >= commom_len_dst1: # If not multicast link
+        max_len = max(commom_len_dst1-1, dst1_info[1])
+        trans_cost += all_data_rate[dst1_info[0]][dst1_info[1]][2] * (place_node_id_dst1 - max_len)
+    
+    # Transimission cost - dst2, before place_node
+    tmp_path_set[dst2_info[0]][dst2_info[1]:] = shortest_path_before_dst2
+    
+    place_node_id_dst2 = len(tmp_path_set[dst2_info[0]]) - 1
+    commom_len_dst2 = Graph.find_common_path_len_edge(dst2_info[0], tmp_path_set, tmp_data_rate) 
+    if place_node_id_dst2 >= commom_len_dst2: # If not multicast link
+        max_len = max(commom_len_dst2-1, dst2_info[1])
+        trans_cost += all_data_rate[dst2_info[0]][dst2_info[1]][2] * (place_node_id_dst2 - max_len)
 
     # Placing cost
-    place_cost = 0
-    node = vnf_info[index][1]
-    if G_min.nodes[node]['share_num'] == 1:
-        place_cost += 1
+    place_cost = 1
+    for d in sfc:
+        if place_cost == 0: break
+        for v in sfc[d]:
+            if d != dst1_info[0] and d != dst2_info[0] and v[1] == place_node:
+                place_cost = 0
+                break
+            if (d == dst1_info[0] or d == dst2_info[0]) and v[1] == place_node and v[2] != place_node_id_dst1 and v[2] != place_node_id_dst2:
+                place_cost = 0
+                break
+    
+    # Processing cost
+    proc_cost = 0
+    commom_len = Graph.find_common_path_len_node_main([dst1_info[0], dst2_info[0]], tmp_path_set, tmp_data_rate)
+    if place_node_id_dst1 >= commom_len:
+        proc_cost += all_data_rate[dst1_info[0]][dst1_info[1]][2]
 
-    ### 如何確定共享的 vnf placing cost
-    return trans_cost + data_rate[last_node_id][2] + place_cost
-        
-# Use new_path_info to create new path on G        
+    commom_len = Graph.find_common_path_len_node_main([dst2_info[0]], tmp_path_set, tmp_data_rate)
+    if place_node_id_dst2 >= commom_len:
+        proc_cost += all_data_rate[dst2_info[0]][dst2_info[1]][2]
+
+    # print('=== ', dst1_info[0], ' ===')
+    # print(tmp_path_set[dst1_info[0]])
+    # print(tmp_data_rate[dst1_info[0]])
+    # print('=== ', dst2_info[0], ' ===')
+    # print(tmp_path_set[dst2_info[0]])
+    # print(tmp_data_rate[dst2_info[0]])
+
+    # print("merge cost = ",trans_cost, place_cost, proc_cost, "\n")
+    return trans_cost + place_cost + proc_cost
+
+# Update path_set, data_rate and sfc after merging.
+# dst_info = [dst, last_node_id_dst, place_node, next_node_id_dst]
+def merge_group_info(G_min, dst1_info, dst2_info, vnf_id, group_info, video_type):
+    path_set = group_info[0]
+    sfc = group_info[1]
+    all_data_rate = group_info[2]
+
+    place_node = dst1_info[2]
+    
+    shortest_path_before_dst1 = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst1_info[0]][dst1_info[1]], place_node, weight='weight')
+    shortest_path_after_dst1 = nx.algorithms.shortest_paths.dijkstra_path(G_min, place_node, dst1_info[0], weight='weight')[1:]
+    shortest_path_before_dst2 = nx.algorithms.shortest_paths.dijkstra_path(G_min, path_set[dst2_info[0]][dst2_info[1]], place_node, weight='weight')
+    shortest_path_after_dst2 = nx.algorithms.shortest_paths.dijkstra_path(G_min, place_node, dst2_info[0], weight='weight')[1:]
+
+    print("------- update_group_info -------")
+    print("vnf_id = ", vnf_id)
+    print('======= dst1 ', dst1_info[0],'========')
+    print(path_set[dst1_info[0]], sfc[dst1_info[0]])
+    print(shortest_path_before_dst1)
+    print(shortest_path_after_dst1)
+    print('======= dst2 ', dst2_info[0],'========')
+    print(path_set[dst2_info[0]], sfc[dst2_info[0]])
+    print(shortest_path_before_dst2)
+    print(shortest_path_after_dst2)
+    print()
+
+    # path_set
+    new_path_set = copy.deepcopy(path_set)
+
+    new_path_set[dst1_info[0]][dst1_info[1]:] = shortest_path_before_dst1 + shortest_path_after_dst1
+    new_path_set[dst2_info[0]][dst2_info[1]:] = shortest_path_before_dst2 + shortest_path_after_dst2
+    
+    # sfc
+    new_sfc = copy.deepcopy(sfc)
+    place_node_id_dst1 = dst1_info[1] + len(shortest_path_before_dst1) - 1
+    place_node_id_dst2 = dst2_info[1] + len(shortest_path_before_dst2) - 1
+
+    new_sfc[dst1_info[0]][vnf_id] = [sfc[dst1_info[0]][vnf_id][0], place_node, place_node_id_dst1]
+    # place remain VNFs, but how to handle the node in shortest path is dst or src?
+
+
+    new_sfc[dst2_info[0]][vnf_id] = [sfc[dst2_info[0]][vnf_id][0], place_node, place_node_id_dst2]
+    
+    # data_rate
+    new_data_rate = update_data_rate(dst1_info, shortest_path_before_dst1, shortest_path_after_dst1, vnf_id, all_data_rate, new_sfc, video_type)
+    new_data_rate = update_data_rate(dst2_info, shortest_path_before_dst2, shortest_path_after_dst2, vnf_id, new_data_rate, new_sfc, video_type)
+
+    
+    # print('------------')
+    # print(new_path_set[dst1_info[0]], new_path_set[dst2_info[0]])
+    # print(new_sfc[dst1_info[0]], new_sfc[dst2_info[0]])
+    # print(new_data_rate[dst1_info[0]], "\n", new_data_rate[dst2_info[0]])
+    # print('-------------------------------------!!')
+
+    return [new_path_set, new_sfc, new_data_rate]
+
+# Update data_rate after merging.
+# dst_info = [dst, last_node_id_dst, place_node, next_node_id_dst] 
+def update_data_rate(dst_info, shortest_path_before, shortest_path_after, vnf_id, data_rate, sfc, video_type):
+    dst = dst_info[0]
+    last_node_id = copy.deepcopy(dst_info[1])
+
+    new_data_rate = copy.deepcopy(data_rate)
+
+    # print(sfc[dst][vnf_id][2]-1, data_rate[dst])
+
+    input_data = data_rate[dst][sfc[dst][vnf_id][2]-1][2]
+    output_data = data_rate[dst][sfc[dst][vnf_id][2]][2]
+    # print(dst)
+    
+    del new_data_rate[dst][last_node_id:] 
+
+    input_q = video_type[int(sfc[dst][vnf_id][0][-2])]
+    output_q = video_type[int(sfc[dst][vnf_id][0][-1])]
+
+    # print("input: ", input_data, input_q, ", output: ", output_data, output_q)
+    # print(vnf_id, sfc[dst])
+    # print(shortest_path_before)
+    # print(shortest_path_after)
+
+    for n in shortest_path_before:
+        if n == shortest_path_before[-1]:
+            break
+        new_data_rate[dst].insert(last_node_id, (n, input_q, input_data))
+        last_node_id += 1
+
+    new_data_rate[dst].insert(last_node_id, (dst_info[2], output_q, output_data))
+    last_node_id += 1
+    for n in shortest_path_after:
+        if n == shortest_path_after[-1]: 
+            break
+        new_data_rate[dst].insert(last_node_id, (n, output_q, output_data))
+        last_node_id += 1
+    
+    # print(new_data_rate[dst])
+
+    return new_data_rate
+
+# Update sfc
+def update_sfc(dst, sfc):
+    new_sfc = copy.deepcopy(sfc)
+
+    input_q = sfc[dst][0][0][-2]
+    output_q = sfc[dst][0][0][-1]
+    if len(sfc[dst]) > 1:
+        new_sfc[dst] = []
+    for v_id in range(1,len(sfc[dst])):
+        if sfc[dst][v_id-1][2] == sfc[dst][v_id][2]:
+            output_q = sfc[dst][v_id][0][-1]
+        else:
+            vnf = "t_" + str(input_q) + str(output_q)
+            new_sfc[dst].append([vnf, sfc[dst][v_id-1][1], sfc[dst][v_id-1][2]])
+            input_q = sfc[dst][v_id][0][-2]
+            output_q = sfc[dst][v_id][0][-1]
+
+        if v_id == len(sfc[dst])-1:
+            vnf = "t_" + str(input_q) + str(output_q)
+            new_sfc[dst].append([vnf, sfc[dst][v_id][1], sfc[dst][v_id][2]])
+
+    return new_sfc
+
+# Update path_set and data_rate after re-connect last VNF with dst.
+def update_group_info(G_min, dst, group_info, video_type):
+    path_set = group_info[0]
+    sfc = group_info[1]
+    data_rate = group_info[2]
+
+    new_sfc = update_sfc(dst, sfc)
+
+    last_vnf = new_sfc[dst][-1][1]
+    last_vnf_id = new_sfc[dst][-1][2]
+
+    new_path_set = copy.deepcopy(path_set)
+    new_data_rate = copy.deepcopy(data_rate)
+
+    shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_vnf, dst, weight='weight')
+
+    # if len(shortest_path) < len(path_set[dst][last_vnf_id:]):
+    #     print(dst, "--- new final path ---")
+    #     print(path_set[dst])
+    #     print(shortest_path)
+    #     print(new_sfc[dst])
+    #     print(data_rate[dst])
+    #     print(last_vnf, last_vnf_id)
+
+    #     new_path_set[dst][last_vnf_id:] = shortest_path
+    #     print(new_path_set[dst])
+
+    #     input_q = video_type[int(sfc[dst][-1][0][-2])]
+    #     output_q = video_type[int(sfc[dst][-1][0][-1])]
+    #     # print("input : ", input_q, ", output: ", output_q)
+    #     # print(data_rate[dst][last_vnf_id-1][2])
+    #     output_data = exp_set.cal_transcode_bitrate(data_rate[dst][last_vnf_id-1][2], input_q, output_q)
+    #     del new_data_rate[dst][last_vnf_id:]
+    #     for n in shortest_path:
+    #         new_data_rate[dst].append((n, output_q, output_data))
+
+    #     print(new_path_set[dst])
+    #     print(new_data_rate[dst])
+
+    return [new_path_set, new_sfc, new_data_rate]
+
+# Use new_path_info to create new path on G.
 def update_graph(G, new_path_info, sort_dsts):
     path_set = new_path_info[0]
     sfc = new_path_info[1]

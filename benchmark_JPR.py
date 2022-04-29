@@ -372,7 +372,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                     continue
 
                 last_node = update_shortest_path_set[dst][-1]
-                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='data_rate')
+                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, i, weight='weight')
                 
                 vnf = sfc[dst][index_sfc_min[dst]['index']+1]
 
@@ -517,7 +517,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
         if dst not in missing_vnf_dsts:
             continue
         last_node = update_shortest_path_set[dst][-1]
-        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='data_rate')
+        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
         
         for i,j in enumerate(shortest_path):
             if i == 0:

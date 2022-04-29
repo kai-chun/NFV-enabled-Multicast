@@ -6,7 +6,8 @@ Calculate the cost of multicast path
 
 total cost = transmission cost + processing cost + placing cost
 '''
-def cal_total_cost(G):
+# weight = (transmission weight, processing weight, placing weight)
+def cal_total_cost(G, weight):
     trans_cost = 0
     proc_cost = 0
     plac_cost = 0
@@ -19,7 +20,7 @@ def cal_total_cost(G):
             plac_cost += len(set(v[0][0] for v in dic['vnf']))
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
-    total_cost = trans_cost + plac_cost + proc_cost 
+    total_cost = weight[0]*trans_cost + weight[1]*proc_cost +weight[2]*plac_cost
     return (total_cost, trans_cost, plac_cost, proc_cost)
 
 def cal_trans_cost(G):

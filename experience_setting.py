@@ -160,7 +160,7 @@ def read_exp_graph(order, factor, factor_num):
             index = i+1
             break
         line = list(re.split(' ', content[i]))
-        node = (int(line[0]), {'com_capacity': float(line[1][:-1]), 'mem_capacity': 5, 'vnf': []})
+        node = (int(line[0]), {'com_capacity': float(line[1][:-1]), 'mem_capacity': 5, 'vnf': [], 'share_num': 0})
         node_list.append(node)
 
     edge_list = []

@@ -9,6 +9,9 @@
 對這兩個組找最好的品質，並對這兩個組的上游找可以放轉碼器的部分
 '''
 
+### 成本計算為 s-x-a
+### 用 cost_metric 紀錄當下節省最多成本的合併策略，並合併
+
 import copy
 import networkx as nx
 
