@@ -62,7 +62,7 @@ def search_multipath(G, pos, service, quality_list):
         # node_attr = {node: [placement VNF]}
         node_attr = {}
         for m in shortest_path:
-            if m not in multicast_path_min:
+            if m not in multicast_path_min or len(multicast_path_min.nodes[m]) == 0:
                 node_attr[m] = {'vnf': []}
             else:
                 node_attr[m] = multicast_path_min.nodes[m]
@@ -165,7 +165,7 @@ def search_multipath(G, pos, service, quality_list):
                 while G_min.nodes[i]['mem_capacity'] >= 0: # memory capacity
 
                     if G_min.nodes[i]['com_capacity'] > data_rate[dst][-1][2]: # compute capacity
-                        if i not in multicast_path_min:
+                        if i not in multicast_path_min or len(multicast_path_min.nodes[i]) == 0:
                             multicast_path_min.add_node(i, vnf=[])
 
                         index_sfc[dst]['index'] += 1
@@ -226,7 +226,7 @@ def search_multipath(G, pos, service, quality_list):
         for i,j in enumerate(shortest_path):
             if i == 0:
                 continue
-            if j not in multicast_path_min:
+            if j not in multicast_path_min or len(multicast_path_min.nodes[j]) == 0:
                 multicast_path_min.add_node(j, vnf=[])
             e = (last_node, j)
             update_shortest_path_set[dst].append(j)

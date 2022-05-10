@@ -10,15 +10,12 @@ import grouping
 import benchmark_unicast
 import benchmark_JPR
 import benchmark_firstFit
-import main_multicast5
-import main_multicast4
-import main_multicast3
-import main_multicast2
-import main_multicast
+import main_multicast6
+
 
 '''
 # 調整各種參數（拓墣、節點數[20-100,200]、使用者比例），印出數據
-topology: Abilene(11), Agis(25), Bellcanada(48), Columbus(71), Oteglobe(93), 
+topology: Agis(25), Bellcanada(48), Columbus(71), Oteglobe(93), 
 Deltacom(113), Pern(127), GtsCe(149), Cogentco(197)
 
 ---
@@ -31,12 +28,12 @@ def main():
     beta = 1 - alpha
 
     node_num = 25
-    dst_ratio = 0.2
+    dst_ratio = 0.3
     edge_prob = 0.8 
 
     exp_factor = dst_ratio
     add_factor = 0.1
-    bound_factor = 0.6
+    bound_factor = 0.3
 
     # cost weight: transimission, processing, placing
     weight = (0.6, 0.4, 1)
@@ -88,8 +85,8 @@ def main():
         graph_exp = {'node_num': node_num, 'edge_prob': edge_prob}
         service_exp = {'dst_num': dst_num, 'video_type': video_type}
         
-        # for i in range(exp_num):
-        #    exp_set.generate_exp(graph_exp, service_exp, i, factor, exp_factor)
+        for i in range(exp_num):
+           exp_set.generate_exp(graph_exp, service_exp, i, factor, exp_factor)
 
         print('exp ok')
 
@@ -144,7 +141,7 @@ def main():
                 # print('G_JPR_notReuse', end=' ')
                 G_firstFit_ans = benchmark_firstFit.search_multipath(G_firstFit, pos, service_firstFit, quality_list)
                 # print('firstFit', end=' ')
-                G_main_ans = main_multicast5.search_multipath(G_main, service_main, quality_list)
+                G_main_ans = main_multicast6.search_multipath(G_main, service_main, quality_list)
                 G_main_all.append(G_main_ans)
 
                 G_unicast = copy.deepcopy(G_unicast_ans[0])
@@ -164,10 +161,9 @@ def main():
                 failed_num_main += len(G_main_ans[-1])
                 
                 #print("group", j," : ", Graph.cal_total_cost(G_main)) 
-            
             # print("main: ", Graph.cal_total_cost(G_main, weight))
-            G_merge = main_multicast5.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
-            # print("merge: ", Graph.cal_total_cost(G_merge, weight))
+            G_merge = main_multicast6.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
+            # print("merge2: ", Graph.cal_total_cost(G_merge, weight))
 
             cost_tuple_unicast = Graph.cal_total_cost(G_unicast, weight)
             cost_tuple_JPR = Graph.cal_total_cost(G_JPR, weight)
@@ -223,7 +219,7 @@ def main():
 
         exp_factor = round(exp_factor + add_factor, 2)
         print("total_cost = ", round(total_cost_unicast[0]/exp_num,3), " / ", round(total_cost_main[0]/exp_num,3), " / ", round(total_cost_JPR[0]/exp_num,3), " / ", round(total_cost_JPR_notReuse[0]/exp_num,3), " / ", round(total_cost_firstFit[0]/exp_num,3))
-        print("total_dst = ", total_dst, "/", failed_num_unicast, "/", failed_num_main, "/", failed_num_JPR, "/", failed_num_JPR_notReuse, "/", failed_num_firstFit)
+        print("total_dst = ", total_dst, "//", failed_num_unicast, "/", failed_num_main, "/", failed_num_JPR, "/", failed_num_JPR_notReuse, "/", failed_num_firstFit)
         print("avg_cost = ", round(exp_data_unicast[4][-1],3), " / ", round(total_cost_main[0]/(total_dst-failed_num_main),3), " / ", round(total_cost_JPR[0]/(total_dst-failed_num_JPR),3), " / ", round(total_cost_JPR_notReuse[0]/(total_dst-failed_num_JPR_notReuse),3), " / ", round(total_cost_firstFit[0]/(total_dst-failed_num_firstFit),3))
 
     ### Print data: failed num of dst.

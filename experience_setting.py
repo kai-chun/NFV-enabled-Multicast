@@ -17,36 +17,36 @@ import math
 
 def create_topology(node_num, edge_prob):
     ### Use realistic topology
-    # input_G = nx.read_gml("topology/Abilene.gml")
+    input_G = nx.read_gml("topology/Bellcanada.gml")
 
-    # pos = {}
-    # node_list = {}
-    # for i,n in enumerate(input_G.nodes(data=True)):
-    #     node_list[n[0]] = i
-    #     pos[i] = [n[1]['Longitude'],n[1]['Latitude']]
-
-    # edge_list = []
-    # edge_attr = {}
-    # for n1, n2, dic in input_G.edges(data=True):
-    #     e = (node_list[n1], node_list[n2])
-    #     edge_list.append(e)
-    #     link_label = dic['LinkLabel'].split(' ')
-    #     edge_attr[e] = {}
-    #     #edge_attr[e]['bandwidth'] = int(link_label[0])
-    #     #edge_attr[e]['data_rate'] = 0
-
-    ### Grid Grpah
-    m = int(math.floor(math.sqrt(node_num)))
-    input_G = nx.generators.grid_2d_graph(m,m)
-    
+    pos = {}
     node_list = {}
     for i,n in enumerate(input_G.nodes(data=True)):
         node_list[n[0]] = i
+        pos[i] = [n[1]['Longitude'],n[1]['Latitude']]
 
     edge_list = []
+    edge_attr = {}
     for n1, n2, dic in input_G.edges(data=True):
         e = (node_list[n1], node_list[n2])
         edge_list.append(e)
+        link_label = dic['LinkLabel'].split(' ')
+        edge_attr[e] = {}
+        #edge_attr[e]['bandwidth'] = int(link_label[0])
+        #edge_attr[e]['data_rate'] = 0
+
+    ### Grid Grpah
+    # m = int(math.floor(math.sqrt(node_num)))
+    # input_G = nx.generators.grid_2d_graph(m,m)
+    
+    # node_list = {}
+    # for i,n in enumerate(input_G.nodes(data=True)):
+    #     node_list[n[0]] = i
+
+    # edge_list = []
+    # for n1, n2, dic in input_G.edges(data=True):
+    #     e = (node_list[n1], node_list[n2])
+    #     edge_list.append(e)
 
     G = nx.Graph()
     G.add_nodes_from(list(range(len(node_list))))
@@ -65,13 +65,13 @@ def create_topology(node_num, edge_prob):
     # pos = nx.spring_layout(G) 
 
     nx.set_node_attributes(G, {n: {'mem_capacity': 5} for n in G.nodes})
-    nx.set_node_attributes(G, {n: {'com_capacity': round(random.uniform(2.5,10), 2)} for n in G.nodes})
+    nx.set_node_attributes(G, {n: {'com_capacity': round(random.uniform(5,10), 2)} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
-    nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(2.5,10), 2)} for e in G.edges})
+    nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(5,10), 2)} for e in G.edges})
     nx.set_edge_attributes(G, {e: {'data_rate': 0} for e in G.edges})
 
     nx.draw(G, pos)
-    plt.savefig('img/Grid.png')
+    plt.savefig('img/Bellcanada.png')
     plt.close()
 
     #print(G.nodes(data=True))

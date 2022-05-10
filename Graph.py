@@ -21,7 +21,7 @@ def cal_total_cost(G, weight):
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
     total_cost = weight[0]*trans_cost + weight[1]*proc_cost +weight[2]*plac_cost
-    return (total_cost, trans_cost, plac_cost, proc_cost)
+    return (total_cost, trans_cost, proc_cost, plac_cost)
 
 def cal_trans_cost(G):
     trans_cost = 0

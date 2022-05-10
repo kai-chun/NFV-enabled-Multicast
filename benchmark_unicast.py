@@ -67,7 +67,7 @@ def search_unicast_path(G, pos, service, quality_list):
         # node_attr = {node: [placement VNF]}
         node_attr = {}
         for m in shortest_path:
-            if m not in unicast_path_min:
+            if m not in unicast_path_min or len(unicast_path_min.nodes[m]) == 0:
                 node_attr[m] = {'vnf': []}
             else:
                 node_attr[m] = unicast_path_min.nodes[m]
@@ -139,7 +139,7 @@ def search_unicast_path(G, pos, service, quality_list):
                 if i in unicast_path_min.nodes() and unicast_path_min.nodes[i]['vnf'] != []:
                     delete_node.remove(i)
             unicast_path_min.remove_nodes_from(delete_node)
-            if dst not in unicast_path_min.nodes():
+            if dst not in unicast_path_min.nodes() or len(unicast_path_min.nodes[dst]) == 0:
                 unicast_path_min.add_node(dst, vnf=[])
             del update_shortest_path_set[dst][last_node_index+1:]
             
@@ -223,7 +223,7 @@ def search_unicast_path(G, pos, service, quality_list):
                         index_sfc[dst]['index'] += 1
                         index_sfc[dst]['place_node'].append(i)
 
-                        if i not in unicast_path_min:
+                        if i not in unicast_path_min or len(unicast_path_min.nodes[i]) == 0:
                             unicast_path_min.add_node(i, vnf=[])
 
                         if vnf not in unicast_path_min.nodes[i]['vnf']: 
@@ -279,7 +279,7 @@ def search_unicast_path(G, pos, service, quality_list):
         for i,j in enumerate(shortest_path):
             if i == 0:
                 continue
-            if j not in unicast_path_min:
+            if j not in unicast_path_min or len(unicast_path_min.nodes[j]) == 0:
                 unicast_path_min.add_node(j, vnf=[])
             e = (last_node, j)
             update_shortest_path_set[dst].append(j)
@@ -299,7 +299,7 @@ def search_unicast_path(G, pos, service, quality_list):
     min_bandwidth = min(list(dic['bandwidth'] for (n1,n2,dic) in G_min.edges(data=True)))
     if min_bandwidth < 0:
         return (G, nx.Graph())
-
+    
     return (G_min, unicast_path_min)
 
 
