@@ -7,7 +7,7 @@ Calculate the cost of multicast path
 total cost = transmission cost + processing cost + placing cost
 '''
 # weight = (transmission weight, processing weight, placing weight)
-def cal_total_cost(G, weight):
+def cal_total_cost(G, weight, is_reuse):
     trans_cost = 0
     proc_cost = 0
     plac_cost = 0
@@ -17,7 +17,10 @@ def cal_total_cost(G, weight):
         trans_cost += dic['data_rate']
     for (n,dic) in G.nodes(data=True):
         if len(dic['vnf']) != 0:
-            plac_cost += len(set(v[0][0] for v in dic['vnf']))
+            if is_reuse:
+                plac_cost += len(set(v[0][0] for v in dic['vnf']))
+            else:
+                plac_cost += len(dic['vnf'])
             for vnf in dic['vnf']:
                 proc_cost += vnf[2]
     total_cost = weight[0]*trans_cost + weight[1]*proc_cost +weight[2]*plac_cost
@@ -71,6 +74,25 @@ def count_instance(G):
     for (n, dic) in G.nodes(data=True):
         sum += len(dic['vnf'])
     return sum
+
+'''
+Count the number of vnf in service
+'''
+def count_vnf(sfc):
+    sum = 0;
+    for d in sfc:
+        sum += len(sfc[d])
+    return sum
+
+'''
+Count the max length of path in service
+'''
+def max_len(path_set):
+    max_len = 0;
+    for d in path_set:
+        if len(path_set[d])-1 > max_len:
+            max_len = len(path_set[d])-1
+    return max_len
 
 '''
 Find common path for adding new edge

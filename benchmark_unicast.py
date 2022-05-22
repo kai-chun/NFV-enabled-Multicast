@@ -2,6 +2,7 @@ import networkx as nx
 import copy
 
 import experience_setting as exp_set
+import Graph
 
 def add_new_edge(G, path, e, data_rate):
     if path.has_edge(*e) == False:
@@ -29,7 +30,7 @@ def search_unicast_path(G, pos, service, quality_list):
 
     best_quality = service[3]
 
-    sfc = service[2]
+    sfc = copy.deepcopy(service[2])
     require_quality = set(dsts[i] for i in dsts)
     max_transcoder_num = len(require_quality) - 1
 
@@ -46,6 +47,7 @@ def search_unicast_path(G, pos, service, quality_list):
     
     G_min = copy.deepcopy(G)
     unicast_path_min = nx.Graph()
+    failed_dsts = list()
 
     # Record the satisfied vnf now and place node
     index_sfc = dict((d,{'index': -1, 'place_node':[]}) for d in dst_list)
@@ -59,6 +61,7 @@ def search_unicast_path(G, pos, service, quality_list):
 
     # Find shortest path
     for d in sort_dsts:
+        G_tmp = copy.deepcopy(G_min)
         dst = d[0]
         shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, src, dst, weight='weight')
         shortest_path_set[dst] = [src]
@@ -71,9 +74,11 @@ def search_unicast_path(G, pos, service, quality_list):
                 node_attr[m] = {'vnf': []}
             else:
                 node_attr[m] = unicast_path_min.nodes[m]
+
         unicast_path_min.add_nodes_from(shortest_path)
         nx.set_node_attributes(unicast_path_min, node_attr)
 
+        is_enough = True
         for i in range(len(shortest_path)-1):
             shortest_path_set[dst].append(shortest_path[i+1])
 
@@ -117,7 +122,14 @@ def search_unicast_path(G, pos, service, quality_list):
                     data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
             
             e = (shortest_path[i],shortest_path[i+1])
+            if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]:
+                is_enough = False
+                continue
             add_new_edge(G_min, unicast_path_min, e, data_rate[dst][-1])
+
+        if is_enough == False:
+            G_min = copy.deepcopy(G_tmp)
+            failed_dsts.append(dst)
 
     '''
     A corrective subroutine that places the missing NF instances 
@@ -125,7 +137,7 @@ def search_unicast_path(G, pos, service, quality_list):
     '''
     missing_vnf_dsts = []
     for dst in index_sfc: # find all dst which missing vnf 
-        if index_sfc[dst]['index'] < len(sfc[dst])-1:
+        if dst not in failed_dsts and index_sfc[dst]['index'] < len(sfc[dst])-1:
             missing_vnf_dsts.append(dst)
 
     if len(missing_vnf_dsts) > 0:
@@ -144,6 +156,7 @@ def search_unicast_path(G, pos, service, quality_list):
             del update_shortest_path_set[dst][last_node_index+1:]
             
         for dst in update_shortest_path_set:
+            if dst in failed_dsts: continue
             for i in range(len(data_rate[dst])-1,-1,-1):
                 data = data_rate[dst][i]
                 if data[0] not in update_shortest_path_set[dst]:
@@ -157,10 +170,15 @@ def search_unicast_path(G, pos, service, quality_list):
         for n1,n2,d in G.edges(data=True):
             G_min.add_edge(n1,n2,data_rate=d['data_rate'],bandwidth=d['bandwidth'])
 
+        # for n, d in G_min.nodes(data=True):
+        #     for v in d['vnf']:
+        #         if int(v[0][2:]) in 
+
         unicast_path_min.remove_edges_from(unicast_path_min.edges())
         tmp_list = dict()
         for d in sort_dsts:
             dst = d[0]
+            if dst in failed_dsts: continue
             tmp_list[dst] = []
             for i in range(len(update_shortest_path_set[dst])-1):
                 e = (update_shortest_path_set[dst][i], update_shortest_path_set[dst][i+1])
@@ -191,6 +209,8 @@ def search_unicast_path(G, pos, service, quality_list):
         find_distance = 0 # the length range of finding node away from last_node that placing VNF
         place_flag = 0 # whether placing VNF or not
 
+        G_tmp = copy.deepcopy(G_min)
+
         while index_sfc[dst]['index'] < len(sfc[dst])-1:
             last_node = update_shortest_path_set[dst][-1]
             if place_flag == 0:
@@ -218,7 +238,7 @@ def search_unicast_path(G, pos, service, quality_list):
 
                 # Check if node has enough resource to place instance
                 while G_min.nodes[i]['mem_capacity'] >= 0: # memory capacity
-                    
+                    is_enough = True
                     if G_min.nodes[i]['com_capacity'] > data_rate[dst][-1][2]: # compute capacity
                         index_sfc[dst]['index'] += 1
                         index_sfc[dst]['place_node'].append(i)
@@ -236,6 +256,9 @@ def search_unicast_path(G, pos, service, quality_list):
                                     update_shortest_path_set[dst].append(i)
                             
                                 e = (last_node, i)
+                                if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]:
+                                    is_enough = False
+                                    break
                                 # If previous_node to i don't have path then build it
                                 add_new_edge(G_min, unicast_path_min, e, data_rate[dst][-1])
                             else:
@@ -243,8 +266,15 @@ def search_unicast_path(G, pos, service, quality_list):
                                     if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
                                         update_shortest_path_set[dst].append(shortest_path[j+1])
                                     e = (shortest_path[j], shortest_path[j+1])
+                                    if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]:
+                                        is_enough = False
+                                        break
                                     add_new_edge(G_min, unicast_path_min, e, data_rate[dst][-1])
-
+                        
+                        if is_enough == False: 
+                            G_min = copy.deepcopy(G_tmp)
+                            failed_dsts.append(dst)
+                            break
                         G_min.nodes[i]['vnf'].append((vnf, data_rate[dst][-1][1],data_rate[dst][-1][2]))
                         unicast_path_min.nodes[i]['vnf'].append((vnf, data_rate[dst][-1][1], data_rate[dst][-1][2]))
                         G_min.nodes[i]['com_capacity'] -= data_rate[dst][-1][2]
@@ -270,8 +300,9 @@ def search_unicast_path(G, pos, service, quality_list):
 
     # Construct the path from the last_placement_node to dst and ignore bandwidth constraint
     for d in sort_dsts:
+        G_tmp = copy.deepcopy(G_min)
         dst = d[0]
-        if dst not in missing_vnf_dsts:
+        if dst not in missing_vnf_dsts or dst in failed_dsts:
             continue
         last_node = update_shortest_path_set[dst][-1]
         shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
@@ -283,6 +314,12 @@ def search_unicast_path(G, pos, service, quality_list):
                 unicast_path_min.add_node(j, vnf=[])
             e = (last_node, j)
             update_shortest_path_set[dst].append(j)
+
+            if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]: 
+                G_min = copy.deepcopy(G_tmp)
+                failed_dsts.append(dst)
+                break
+
             add_new_edge(G_min, unicast_path_min, e, data_rate[dst][-1])
             if j != dst:
                 data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
@@ -292,16 +329,14 @@ def search_unicast_path(G, pos, service, quality_list):
     # print(update_shortest_path_set)
     # print(data_rate)
     # print(index_sfc)
+    # print(failed_dsts)
     # print('===============')
     # print(unicast_path_min.edges(data=True))
 
-    # Check if edges of multicast_path have enough resource to transmission data.
-    min_bandwidth = min(list(dic['bandwidth'] for (n1,n2,dic) in G_min.edges(data=True)))
-    if min_bandwidth < 0:
-        return (G, nx.Graph())
-    
-    return (G_min, unicast_path_min)
+    for d in sfc:
+        if d in failed_dsts:
+            sfc[d] = []
 
-
-
-
+    # weight = (0.6, 0.4, 1)
+    # print(Graph.cal_total_cost(G_min, weight, False))
+    return (G_min, unicast_path_min, failed_dsts, sfc, update_shortest_path_set)

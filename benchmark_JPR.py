@@ -45,7 +45,7 @@ def cal_cost(G, tree_list, alpha, vnf_type):
                     capacity = G.nodes[n]['com_capacity']
                     if capacity == 0:
                         capacity = 1e-8
-                    proc_cost += (proc_data[2] / G.nodes[n]['com_capacity'])
+                    proc_cost += (proc_data[2] / capacity)
     return alpha * trans_cost + (1 - alpha) * proc_cost
 
 '''
@@ -125,7 +125,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
 
     best_quality = service[3]
 
-    sfc = service[2]
+    sfc = copy.deepcopy(service[2])
     require_quality = set(dsts[i] for i in dsts)
     max_transcoder_num = len(require_quality) - 1
     sort_quality = sorted(require_quality, key=lambda q: video_type.index(q), reverse=True)
@@ -349,7 +349,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 find_distance += 1
                 if find_distance >= len(G.edges()):
                     print('cannot find path')
-                    return (G, nx.Graph())
+                    return (G, nx.Graph(), [], {})
             else:
                 find_distance = 1
                 place_flag = 0
@@ -568,7 +568,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
         # print(update_shortest_path_set)
         # print(final_data_rate)
         # print(index_sfc_min)
-        return (G_min, multicast_path_min)
+        return (G_min, multicast_path_min, sfc, update_shortest_path_set)
 
     # Record all path from src to dst with its ordered nodes
     # final_path_set = {dst: [the ordered nodes of shortest path]}
@@ -669,7 +669,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             # print('----------')
             # print(path_final.nodes(data=True))
             # print(path_final.edges(data=True))
-            return (G, nx.Graph())
+            return (G, nx.Graph(), [], {})
         else:
             tmp_path_set = dst_path[last_vnf_node_index:(i+1)]
             tmp_path_set.append(dst_path[i+1])
@@ -687,4 +687,4 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
     # print(final_path_set)
     # print(final_data_rate)
     # print(index_sfc_min)
-    return (G_final, path_final)
+    return (G_final, path_final, sfc, final_path_set)

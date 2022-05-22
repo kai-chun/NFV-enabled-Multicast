@@ -15,25 +15,40 @@ import math
 #         self.dst_ratio = dst_ratio  # percentage of dst in node
 #         self.dst_num = int(ceil(node_num * dst_ratio))
 
-def create_topology(node_num, edge_prob):
+def create_topology(node_num, edge_prob, factor):
     ### Use realistic topology
-    input_G = nx.read_gml("topology/Bellcanada.gml")
+    input_G = nx.read_gml("topology/"+factor+".gml")
+
+    max_Lon = -float('inf')
+    min_Lon = float('inf')
+    max_Lat = -float('inf')
+    min_Lat = float('inf')
 
     pos = {}
     node_list = {}
     for i,n in enumerate(input_G.nodes(data=True)):
         node_list[n[0]] = i
-        pos[i] = [n[1]['Longitude'],n[1]['Latitude']]
+        if 'Longitude' not in n[1]:
+            lon = round(random.uniform(min_Lon,max_Lon), 5)
+        else:
+            lon = n[1]['Longitude']
+            if lon > max_Lon: max_Lon = lon
+            if lon < min_Lon: min_Lon = lon
+        if 'Latitude' not in n[1]:
+            lat = round(random.uniform(min_Lat,max_Lat), 5)
+        else:
+            lat = n[1]['Latitude']
+            if lat > max_Lat: max_Lat = lat
+            if lat < min_Lat: min_Lat = lat
+
+        pos[i] = [lon,lat]
 
     edge_list = []
     edge_attr = {}
     for n1, n2, dic in input_G.edges(data=True):
         e = (node_list[n1], node_list[n2])
         edge_list.append(e)
-        link_label = dic['LinkLabel'].split(' ')
         edge_attr[e] = {}
-        #edge_attr[e]['bandwidth'] = int(link_label[0])
-        #edge_attr[e]['data_rate'] = 0
 
     ### Grid Grpah
     # m = int(math.floor(math.sqrt(node_num)))
@@ -70,8 +85,9 @@ def create_topology(node_num, edge_prob):
     nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(5,10), 2)} for e in G.edges})
     nx.set_edge_attributes(G, {e: {'data_rate': 0} for e in G.edges})
 
-    nx.draw(G, pos)
-    plt.savefig('img/Bellcanada.png')
+    options = {"node_size": 30, "linewidths": 0, "width": 0.1}
+    nx.draw(G, pos, **options)
+    plt.savefig('img/'+factor+'.png')
     plt.close()
 
     #print(G.nodes(data=True))
@@ -112,7 +128,7 @@ Generate the experience data
 '''
 def generate_exp(graph_exp, service_exp, order, factor, factor_num):
     # Generate topology
-    tmp = create_topology(graph_exp['node_num'], graph_exp['edge_prob'])
+    tmp = create_topology(graph_exp['node_num'], graph_exp['edge_prob'], factor)
     G = tmp[0]
     pos = tmp[1]
     N = G.nodes()

@@ -22,7 +22,7 @@ def search_multipath(G, pos, service, quality_list):
 
     best_quality = service[3]
 
-    sfc = service[2]
+    sfc = copy.deepcopy(service[2])
     require_quality = set(dsts[i] for i in dsts)
     max_transcoder_num = len(require_quality) - 1
     sort_quality = sorted(require_quality, key=lambda q: video_type.index(q), reverse=True)
@@ -247,6 +247,9 @@ def search_multipath(G, pos, service, quality_list):
     # Check if edges of multicast_path have enough resource to transmission data.
     min_bandwidth = min(list(dic['bandwidth'] for (n1,n2,dic) in G_min.edges(data=True)))
     if min_bandwidth < 0:
-        return (G, nx.Graph())
+        return (G, nx.Graph(), [], {})
 
-    return (G_min, multicast_path_min)
+    weight = (0.6, 0.4, 1)
+    # print(Graph.cal_total_cost(G_min, weight, False))
+
+    return (G_min, multicast_path_min, sfc, update_shortest_path_set)
