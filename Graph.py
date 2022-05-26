@@ -215,6 +215,8 @@ def add_new_processing_data_main(G, path, path_set, dst, index, vnf, data_rate, 
     for n in path_set[dst]:
         if n not in path.nodes:
             path.add_node(n, vnf=[])
+        if 'vnf' not in path.nodes[n]:
+            path.nodes[n]['vnf'] = []
     commom_len = find_common_path_len_node_main([dst], path_set, all_data_rate)
     
     node = path_set[dst][index]

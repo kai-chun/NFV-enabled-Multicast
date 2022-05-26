@@ -71,16 +71,24 @@ def search_multipath(G, service, quality_list):
         
         # Build auxiliary graph of enough transimission, placement resources.
         G_tmp = copy.deepcopy(G_min)
-        remove_edges = list((n1,n2) for n1,n2,dic in G_min.edges(data=True) if dic['bandwidth'] < source_data_size)
-        G_tmp.remove_edges_from(remove_edges)
+        tmp_path = copy.deepcopy(multicast_path_min)
+        tmp_path_set = copy.deepcopy(shortest_path_set)
+        tmp_data_rate = copy.deepcopy(data_rate)
+        tmp_index_sfc = copy.deepcopy(index_sfc)
+        is_connect = True
 
-        try:
-            shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_tmp, src, dst, weight='weight')
-        except:
-            failed_dsts.append(d)
-            pass
+        # remove_edges = list((n1,n2) for n1,n2,dic in G_min.edges(data=True) if dic['bandwidth'] < data_rate[dst][-1][2])
+        # G_tmp.remove_edges_from(remove_edges)
 
-        if d in failed_dsts: continue
+        # try:
+        #     shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_tmp, src, dst, weight='weight')
+        # except:
+        #     failed_dsts.append(d)
+        #     pass
+
+        # if d in failed_dsts: continue
+
+        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, src, dst, weight='weight')
         
         shortest_path_set[dst] = [src]
 
@@ -167,7 +175,18 @@ def search_multipath(G, service, quality_list):
                     data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
 
             e = (shortest_path[i],shortest_path[i+1])
+            if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]:
+                is_connect = False
+                break
             Graph.add_new_edge(G_min, multicast_path_min, shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+
+        if is_connect == False:
+            G_min = copy.deepcopy(G_tmp)
+            multicast_path_min = copy.deepcopy(tmp_path)
+            shortest_path_set = copy.deepcopy(tmp_path_set)
+            data_rate = copy.deepcopy(tmp_data_rate)
+            index_sfc = copy.deepcopy(tmp_index_sfc)
+            failed_dsts.append(d)
 
     #
     # A corrective subroutine that places the missing NF instances 
@@ -181,7 +200,7 @@ def search_multipath(G, service, quality_list):
     tmp = benchmark_JPR.update_path(sfc, index_sfc, sort_dsts, G, G_min, multicast_path_min, shortest_path_set, data_rate)
     missing_vnf_dsts = tmp[0]
     update_shortest_path_set = tmp[1]
-    
+
     # Fill up the empty min_data_rate[dst] with best quality (initial date to send)
     for d in dst_list:
         if len(data_rate[d]) == 0 and d not in list(f[0] for f in failed_dsts):
@@ -202,8 +221,8 @@ def search_multipath(G, service, quality_list):
                 find_distance += 1
                 if find_distance >= len(G.edges()):
                     print('cannot find path')
-                    failed_dsts = sort_dsts
-                    return (G, nx.Graph(), list(), dict(), failed_dsts, failed_dsts)
+                    failed_dsts = copy.deepcopy(sort_dsts)
+                    return (G, nx.Graph(), list(), dict(), dict(), failed_dsts, failed_dsts, sfc)
             else:
                 find_distance = 1
                 place_flag = 0
@@ -240,6 +259,7 @@ def search_multipath(G, service, quality_list):
                     tmp_path = copy.deepcopy(multicast_path_min)
                     tmp_path_set = copy.deepcopy(update_shortest_path_set)
                     tmp_data_rate = copy.deepcopy(data_rate)
+                    is_connect = True
                     
                     # Processing data with transcoder
                     if "t" in vnf: # This vnf is transcoder
@@ -257,6 +277,8 @@ def search_multipath(G, service, quality_list):
                             multicast_path_min.add_node(i, vnf=[])
                         
                         e = (last_node, i)
+                        if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
+                            is_connect = False
                         Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                     else:
                         for j in range(len(shortest_path)-1):
@@ -268,11 +290,13 @@ def search_multipath(G, service, quality_list):
                             if j != 0:
                                 data_rate[dst].insert(-2, (shortest_path[j],data_rate[dst][-1][1],data_rate[dst][-1][2]))
                                 #data_rate[dst].append((shortest_path[j],data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                            if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
+                                is_connect = False
                             Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                 
                     is_process_data = Graph.add_new_processing_data_main(G_min, multicast_path_min, update_shortest_path_set, dst, len(update_shortest_path_set[dst])-1, vnf, data_rate[dst][-2], data_rate)
 
-                    if is_process_data == True:
+                    if is_process_data == True and is_connect == True:
                         index_sfc[dst]['index'] += 1
                         index_sfc[dst]['place_node'].append(i)
                         index_sfc[dst]['place_id'].append(len(update_shortest_path_set[dst])-1)
@@ -325,6 +349,8 @@ def search_multipath(G, service, quality_list):
                         
                         e = (last_node, i)
                         # If previous_node to i don't have path then build it
+                        if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
+                            is_connect = False
                         Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                     else:   
                         for j in range(len(shortest_path)-1):
@@ -336,11 +362,13 @@ def search_multipath(G, service, quality_list):
                             if j != 0:
                                 data_rate[dst].insert(-2, (shortest_path[j],data_rate[dst][-1][1],data_rate[dst][-1][2]))
                                 #data_rate[dst].append((shortest_path[j],data_rate[dst][-1][1],data_rate[dst][-1][2]))
+                            if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
+                                is_connect = False
                             Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
 
                     is_process_data = Graph.add_new_processing_data_main(G_min, multicast_path_min, update_shortest_path_set, dst, len(update_shortest_path_set[dst])-1, vnf, data_rate[dst][-2], data_rate)
 
-                    if is_process_data == True:
+                    if is_process_data == True and is_connect == True:
                         index_sfc[dst]['index'] += 1
                         index_sfc[dst]['place_node'].append(i)
                         index_sfc[dst]['place_id'].append(len(update_shortest_path_set[dst])-1)                      
@@ -369,7 +397,21 @@ def search_multipath(G, service, quality_list):
         if dst not in missing_vnf_dsts or d in list(f[0] for f in failed_dsts):
             continue
         last_node = update_shortest_path_set[dst][-1]
-        shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
+
+        # Build auxiliary graph of enough transimission, placement resources.
+        G_tmp = copy.deepcopy(G_min)
+        remove_edges = list((n1,n2) for n1,n2,dic in G_min.edges(data=True) if dic['bandwidth'] < data_rate[dst][-1][2])
+        G_tmp.remove_edges_from(remove_edges)
+
+        try:
+            shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_tmp, last_node, dst, weight='weight')
+        except:
+            failed_dsts.append(d)
+            pass
+
+        if d in failed_dsts: continue
+
+        #shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_min, last_node, dst, weight='weight')
         
         for i,j in enumerate(shortest_path):
             if i == 0:
@@ -433,7 +475,8 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
         best_quality = video_type[max(video_type.index(group_info[g]) for g in group_info)]
         service_fail = (src, group_info, sfc, best_quality)
         re_route_fail_result = search_multipath(G_min, service_fail, quality_list)
-        all_group.append([re_route_fail_result[1],re_route_fail_result[2],re_route_fail_result[3],re_route_fail_result[4],re_route_fail_result[5]])
+        if not nx.classes.function.is_empty(re_route_fail_result[1]):
+            all_group.append([re_route_fail_result[1],re_route_fail_result[2],re_route_fail_result[3],re_route_fail_result[4],re_route_fail_result[5]])
         failed_group = re_route_fail_result[6]
     
     sort_group = sorted(all_group, key=lambda g: Graph.count_instance(g[0]), reverse=True)
@@ -528,16 +571,24 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
     G_final = copy.deepcopy(G)
     
     count_vnf = 0
-    delay = 0
+    delay = [0]
     count_group = 0
     for i in range(len(new_group)):
         if len(merge_group_info[i]) == 0: continue
         G_final = update_graph(G_final, merge_group_info[i], new_group[i][4])
         count_vnf += Graph.count_vnf(merge_group_info[i][1])
-        delay += Graph.max_len(merge_group_info[i][0])
+        delay.append(Graph.max_len(merge_group_info[i][0]))
         count_group += 1
+
+    # neg = [0,0,0]
+    # for n, d in G_final.nodes(data=True):
+    #     if d['mem_capacity'] < 0: neg[0] += 1
+    #     if d['com_capacity'] < 0: neg[1] += 1
+    # for n1, n2, d in G_final.edges(data=True):
+    #     if d['bandwidth'] < 0: neg[2] += 1
+    # print("neg = ",neg)
         
-    return (G_final, failed_group, count_vnf, delay/count_group)
+    return (G_final, failed_group, count_vnf, max(delay))
 
 # Merge path from src to dst
 def merge_path(G_min, src, quality_list, group_info, weight):

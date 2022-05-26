@@ -20,7 +20,14 @@ import experience_setting as exp_set
 Calculate the weight of G.link
 '''
 def cal_link_weight(G, edge, alpha, beta, data_rate):
-    weight = alpha * (data_rate / G.edges[edge]['bandwidth'] + 1) + beta * (data_rate / G.nodes[edge[1]]['com_capacity'])
+    if G.edges[edge]['bandwidth'] == 0 and G.nodes[edge[1]]['com_capacity'] == 0:
+        weight = alpha * (1 + 1) + beta * (1)
+    elif G.edges[edge]['bandwidth'] == 0: 
+        weight = alpha * (1 + 1) + beta * (data_rate / G.nodes[edge[1]]['com_capacity'])
+    elif G.nodes[edge[1]]['com_capacity'] == 0:
+        weight = alpha * (data_rate / G.edges[edge]['bandwidth'] + 1) + beta * (1)
+    else:
+        weight = alpha * (data_rate / G.edges[edge]['bandwidth'] + 1) + beta * (data_rate / G.nodes[edge[1]]['com_capacity'])
     return weight
 
 '''
@@ -96,6 +103,7 @@ def update_path(sfc, index_sfc, sort_dsts, G, G_min, multicast_path, shortest_pa
         tmp_list = dict()
         for d in sort_dsts:
             dst = d[0]
+            if dst not in index_sfc: continue
             tmp_list[dst] = [update_shortest_path_set[dst][0]]
             for i in range(1,len(update_shortest_path_set[dst])):
                 e = (update_shortest_path_set[dst][i-1], update_shortest_path_set[dst][i])
@@ -687,4 +695,5 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
     # print(final_path_set)
     # print(final_data_rate)
     # print(index_sfc_min)
+
     return (G_final, path_final, sfc, final_path_set)

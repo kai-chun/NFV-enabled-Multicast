@@ -15,7 +15,7 @@ import math
 #         self.dst_ratio = dst_ratio  # percentage of dst in node
 #         self.dst_num = int(ceil(node_num * dst_ratio))
 
-def create_topology(node_num, edge_prob, factor):
+def create_topology(graph_set, factor):
     ### Use realistic topology
     input_G = nx.read_gml("topology/"+factor+".gml")
 
@@ -82,13 +82,13 @@ def create_topology(node_num, edge_prob, factor):
     nx.set_node_attributes(G, {n: {'mem_capacity': 5} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'com_capacity': round(random.uniform(5,10), 2)} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
-    nx.set_edge_attributes(G, {e: {'bandwidth': round(random.uniform(5,10), 2)} for e in G.edges})
+    nx.set_edge_attributes(G, {e: {'bandwidth': graph_set['bandwidth']} for e in G.edges})
     nx.set_edge_attributes(G, {e: {'data_rate': 0} for e in G.edges})
 
     options = {"node_size": 30, "linewidths": 0, "width": 0.1}
     nx.draw(G, pos, **options)
-    plt.savefig('img/'+factor+'.png')
-    plt.close()
+    # plt.savefig('img/'+factor+'.png')
+    # plt.close()
 
     #print(G.nodes(data=True))
     #print(G.edges(data=True))
@@ -128,12 +128,12 @@ Generate the experience data
 '''
 def generate_exp(graph_exp, service_exp, order, factor, factor_num):
     # Generate topology
-    tmp = create_topology(graph_exp['node_num'], graph_exp['edge_prob'], factor)
+    tmp = create_topology(graph_exp, factor)
     G = tmp[0]
     pos = tmp[1]
     N = G.nodes()
       
-    output_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_'+str(order)+'.txt', 'w')
+    output_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_B'+str(graph_exp['bandwidth'])+'_'+str(order)+'.txt', 'w')
     for n,dic in G.nodes(data=True):
         output_file.write(str(n)+" "+str(dic['com_capacity'])+"\n")
 
@@ -156,7 +156,7 @@ def generate_exp(graph_exp, service_exp, order, factor, factor_num):
     # sfc = ['t']
     # service = (src, dsts, sfc, quality_list['1080p'])
     
-    output_file_client = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_'+str(order)+'.txt', 'w')
+    output_file_client = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_B'+str(graph_exp['bandwidth'])+'_'+str(order)+'.txt', 'w')
     output_file_client.write(str(src)+"\n")
     for d in dsts:
         output_file_client.write(str(d)+" "+str(dsts[d])+"\n")
@@ -165,8 +165,8 @@ def generate_exp(graph_exp, service_exp, order, factor, factor_num):
 '''
 Read the experience data of graph
 '''
-def read_exp_graph(order, factor, factor_num):
-    input_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_'+str(order)+'.txt', 'r', 1)
+def read_exp_graph(graph_exp, order, factor, factor_num):
+    input_file = open('exp_setting/'+str(factor)+'/G_'+str(factor_num)+'_B'+str(graph_exp['bandwidth'])+'_'+str(order)+'.txt', 'r', 1)
     content = input_file.readlines()
 
     index = 0
@@ -204,8 +204,8 @@ def read_exp_graph(order, factor, factor_num):
 '''
 Read the experience data of service
 '''
-def read_exp_service(order, factor, factor_num):
-    input_data = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_'+str(order)+'.txt', 'r', 1)
+def read_exp_service(graph_exp, order, factor, factor_num):
+    input_data = open('exp_setting/'+str(factor)+'/service_'+str(factor_num)+'_B'+str(graph_exp['bandwidth'])+'_'+str(order)+'.txt', 'r', 1)
     src = int(input_data.readline())
 
     content = input_data.readlines()
