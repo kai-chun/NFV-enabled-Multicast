@@ -28,12 +28,12 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
     alpha = 0.6
     beta = 1 - alpha
 
-    dst_ratio = 0.1
+    dst_ratio = 0.2
     edge_prob = 0.8 
 
     exp_factor = dst_ratio
     add_factor = 0.1
-    bound_factor = 0.4
+    bound_factor = 0.2
     factor = topology
 
     # cost weight: transimission, processing, placing
@@ -102,7 +102,7 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
 
             # Grouping
             group_list = grouping.k_means(pos, dsts, video_type, user_limit, is_group)
-            #group_num.append()
+            group_num.append(len(group_list))
             # print('group ok',len(group_list))
 
             G_main_all = list()
@@ -295,8 +295,8 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
             exp_data_main[8].append(failed_num_main)
             exp_data_merge[8].append(failed_num_merge)
 
-        title = {0: "Total_cost", 1: "Trans_cost", 2: "Proc_cost cost", 3: "Plac_cost", \
-            4: "Avg_cost", 5: "Transcoder_num", 6: "Delay", 7: "Running_time", 8: "failed_num"}
+        title = {0: "Total_cost", 1: "Trans_cost", 2: "Proc_cost", 3: "Plac_cost", \
+            4: "Avg_cost", 5: "Transcoder_num", 6: "Delay", 7: "Running_time", 8: "Failed_num"}
         
         with pd.ExcelWriter('exp_data/'+factor+'_d'+str(exp_factor)+'_bw'+str(bandwidth)+'_exp'+str(exp_num)+'_g'+str(is_group)+'.xlsx') as writer:  
             for i in range(9):
@@ -307,11 +307,12 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
         exp_factor = round(exp_factor + add_factor, 2)
 
     print("=== ",factor," (",len(input_graph[0].nodes),"), BW =",bandwidth," ===")
-    print(f'{"exp num:"}{exp_num:<4d}|{"unicast":^10}|{"merge":^10}|{"main":^10}|{"JPR":^10}|{"notReuse":^10}|{"firstFit":^10}')
+    # print(f'{"exp num:"}{exp_num:<4d}|{"unicast":^10}|{"merge":^10}|{"main":^10}|{"JPR":^10}|{"notReuse":^10}|{"firstFit":^10}')
     # print(f'{"total_cost":12}|{exp_data_unicast[0][-1]:^10.3f}|{exp_data_merge[0][-1]:^10.3f}|{exp_data_main[0][-1]:^10.3f}|{exp_data_JPR[0][-1]:^10.3f}|{exp_data_JPR_notReuse[0][-1]:^10.3f}|{exp_data_firstFit[0][-1]:^10.3f}')
     # print(f'{"failed:"}{total_dst:<5d}|{failed_num_unicast:^10d}|{failed_num_merge:^10d}|{failed_num_main:^10d}|{failed_num_JPR:^10d}|{failed_num_JPR_notReuse:^10d}|{failed_num_firstFit:^10d}')
     # print(f'{"avg_cost":12}|{exp_data_unicast[4][-1]:^10.3f}|{exp_data_merge[4][-1]:^10.3f}|{exp_data_main[4][-1]:^10.3f}|{exp_data_JPR[4][-1]:^10.3f}|{exp_data_JPR_notReuse[4][-1]:^10.3f}|{exp_data_firstFit[4][-1]:^10.3f}')
     print(f'{"running time":12}|{exp_data_unicast[7][-1]:^10.3f}|{exp_data_merge[7][-1]:^10.3f}|{exp_data_main[7][-1]:^10.3f}|{exp_data_JPR[7][-1]:^10.3f}|{exp_data_JPR_notReuse[7][-1]:^10.3f}|{exp_data_firstFit[7][-1]:^10.3f}')
+    print(group_num)
     print()
 
 if __name__ == "__main__":

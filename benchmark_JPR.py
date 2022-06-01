@@ -572,7 +572,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
 
     if min(list(G_min.edges[e]['bandwidth'] for e in G_min.edges())) >= 0:
         final_data_rate = copy.deepcopy(min_data_rate)
-        #print('J = 1')
+        # print('J = 1')
         # print(update_shortest_path_set)
         # print(final_data_rate)
         # print(index_sfc_min)
@@ -588,7 +588,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
         dst_path = update_shortest_path_set[dst]
 
         last_vnf_node_index = 0
-        isRebuild = 0
+        isRebuild = 0 # need to rebuild or not
 
         for i in range(len(dst_path)-1):
             success_flag = False
@@ -599,13 +599,14 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             if G_min.edges[e]['bandwidth'] <= 0:
                 isRebuild = 1
 
-            if dst_path[i+1] not in index_sfc_min[dst]['place_node'] and i+1 < len(dst_path):
+            if dst_path[i+1] not in index_sfc_min[dst]['place_node'] or dst_path[i+1] != dst:
                 continue
             
             # If dst_path[i+1] is the node placing vnf
             tmp_path_set = dst_path[last_vnf_node_index:(i+1)]
             tmp_path_set.append(dst_path[i+1])
 
+            # Build the original path between last_vnf_node_index to current_vnf_node_index(= i+1)
             if isRebuild == 0:
                 for j in range(len(tmp_path_set)-1):
                     e = (tmp_path_set[j], tmp_path_set[j+1])
@@ -616,6 +617,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 last_vnf_node_index = i+1
                 continue
 
+            # Remove the node not used
             for tmp_n in tmp_path_set:
                 if tmp_n != src and tmp_n not in dst_list and tmp_n in path_final.nodes() and path_final.nodes[tmp_n]['vnf'] == []:
                     path_final.remove_node(tmp_n)
@@ -643,7 +645,7 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 
                 # Check if edges of tmp_path have enough resource to transmission data
                 data_rate = (min_data_rate[dst][last_vnf_node_index][1], min_data_rate[dst][last_vnf_node_index][2])
-                if min_bandwidth > data_rate[1]:
+                if min_bandwidth >= data_rate[1]:
                     
                     for m in tmp_path:
                         if m not in path_final:
@@ -669,8 +671,9 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
                 last_vnf_node_index = i+1
                 break
             
+        # Still have no resource to routing multicast
         if isRebuild == 1:
-            #print("infeasible solution")
+            # print("infeasible solution")
             # print(final_path_set)
             # print(final_data_rate)
             # print(index_sfc_min)
@@ -678,17 +681,18 @@ def search_multipath(G, service, alpha, vnf_type, quality_list, isReuse):
             # print(path_final.nodes(data=True))
             # print(path_final.edges(data=True))
             return (G, nx.Graph(), [], {})
-        else:
-            tmp_path_set = dst_path[last_vnf_node_index:(i+1)]
-            tmp_path_set.append(dst_path[i+1])
-            for m in range(len(tmp_path_set)-1):
-                e = (tmp_path_set[m], tmp_path_set[m+1])
-                #if m+1 != dst:
-                final_path_set[dst].append(tmp_path_set[m+1])
-                Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][-1], min_data_rate)
-                final_data_rate[dst].append((dst_path[-2], min_data_rate[dst][-1][1], min_data_rate[dst][-1][2]))
-            if final_path_set[dst][-1] != dst:
-                final_path_set[dst].append(dst)
+        # else:
+        #     tmp_path_set = dst_path[last_vnf_node_index:(i+1)]
+        #     tmp_path_set.append(dst_path[i+1])
+        #     for m in range(len(tmp_path_set)-1):
+        #         e = (tmp_path_set[m], tmp_path_set[m+1])
+        #         #if m+1 != dst:
+        #         final_path_set[dst].append(tmp_path_set[m+1])
+        #         tmp_data_rate = (tmp_path[m], data_rate[0], data_rate[1])
+        #         Graph.add_new_edge(G_final, path_final, final_path_set, dst, e, min_data_rate[dst][-1], min_data_rate)
+        #         final_data_rate[dst].append((dst_path[-2], min_data_rate[dst][-1][1], min_data_rate[dst][-1][2]))
+        #     if final_path_set[dst][-1] != dst:
+        #         final_path_set[dst].append(dst)
 
     # Graph.printGraph(G_final, pos, 'G_final', service, 'bandwidth')
     # Graph.printGraph(path_final, pos, 'path_final', service, 'data_rate')
