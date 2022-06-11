@@ -6,22 +6,41 @@ import math
 import sys
 import itertools
 import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
 
-def cal_distance(dst, center):
-    return math.sqrt((dst[1][0] - center[1][0])**2 + (dst[1][1] - center[1][1])**2)
+# Calculate Standard Deviation of distance between dst to all other dsts
+def cal_distance_SD(G, dst, client):
+    distance_list = []
+    for c in client:
+        distance = nx.shortest_path_length(G, source=dst, target=c)
+        distance_list.append(distance)
+    return np.std(distance_list)
 
-def cal_different(bound, dst, center):
+# Calculate sum of distance between dst to all other dsts
+def cal_distance_sum(G, dst, client):
+    distance = 0
+    for c in client:
+        distance += nx.shortest_path_length(G, source=dst, target=c)
+    return distance
+
+# Calculate difference between dst and center
+def cal_different(G, bound, dst, center):
     if (bound[1] - bound[0]) == 0:
         normal_quality = (abs(dst[0] - center[0]) - bound[0])
     else:
         normal_quality = (abs(dst[0] - center[0]) - bound[0]) / (bound[1] - bound[0])
     
-    distance = math.sqrt((dst[1][0] - center[1][0])**2 + (dst[1][1] - center[1][1])**2)
-    normal_dis = (distance - bound[2]) / (bound[3] - bound[2])
+    distance = nx.shortest_path_length(G, source=dst[1], target=center[1])
+    if (bound[3] - bound[2]) == 0:
+        normal_dis = abs(distance - bound[2])
+    else:
+        normal_dis = abs(distance - bound[2]) / (bound[3] - bound[2])
 
     return math.sqrt(normal_quality**2 + normal_dis**2)
 
-def clustering(dsts, centers):
+# Cluster dsts with its minimum difference center
+def clustering(G, dsts, centers):
     cluster = dict()
     for c in range(len(centers)):
         cluster[c] = []
@@ -37,7 +56,7 @@ def clustering(dsts, centers):
             q_min[i] = min(q_min[i],abs(dic[0] - center[0]))
             q_max[i] = max(q_max[i],abs(dic[0] - center[0]))
             
-            distance = math.sqrt((dic[1][0] - center[1][0])**2 + (dic[1][1] - center[1][1])**2)
+            distance = nx.shortest_path_length(G, source=dst, target=center[1])
             dis_min[i] = min(dis_min[i],distance)
             dis_max[i] = max(dis_max[i],distance)
 
@@ -48,7 +67,7 @@ def clustering(dsts, centers):
 
         for i,center in enumerate(centers):
             bound = (q_min[i], q_max[i], dis_min[i], dis_max[i])
-            dif = cal_different(bound, dic, center)
+            dif = cal_different(G, bound, dic, center)
             if dif < min_dif:
                 min_dif = dif
                 min_center = i
@@ -56,80 +75,82 @@ def clustering(dsts, centers):
     
     return cluster
         
-def get_centers(cluster, client):
+# Get new center in cluster
+# center has the average quality and the minimum standard deviation distance to every dst
+def get_centers(G, cluster, client):
     centers = []
 
     for i in cluster:
         center_quality = 0
-        center_x = 0
-        center_y = 0
+        center_dis = {}
         
         dic = cluster[i]
+
         if len(dic) == 0:
             return []
         for dst in dic:
             center_quality += client[dst][0]
-            center_x += client[dst][1][0]
-            center_y += client[dst][1][1]
+
+        for dst in G.nodes():
+            #center_dis[dst] = cal_distance_SD(G, dst, dic)
+            center_dis[dst] = cal_distance_sum(G, dst, dic)
         
-        center = (math.ceil(center_quality/len(dic)),[round(center_x/len(dic),8),round(center_y/len(dic),8)])    
+        # Select the minimum standard deviation dst to become new center
+        center = (math.ceil(center_quality/len(dic)),min(center_dis, key=center_dis.get))    
         centers.append(center)
     
     return centers
 
-def print_graph(client, centers, cluster, n):
-    color_cycle = itertools.cycle(["#ff7f0e","#2ca02c","#1f77b4"])
+def print_graph(G, cluster):
+    color_list = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
     plt.figure()
-    for i in cluster:
-        x_list = list(client[j][1][0] for j in cluster[i])
-        y_list = list(client[j][1][1] for j in cluster[i])
-        plt.scatter(x_list, y_list, color=next(color_cycle))
-        for j in cluster[i]:
-            q = client[j][0]
-            plt.annotate(q, (client[j][1][0], client[j][1][1]))
+    pos = nx.spring_layout(G)
+    options = {"node_size": 30, "linewidths": 0}
+    nx.draw(G, pos, node_color='black',edge_color='gray',**options)
 
-    plt.savefig('g_img/tmp_'+n+'.png')
-    plt.show()
+    for i in range(len(cluster)):
+        nx.draw_networkx_nodes(G, pos, nodelist=cluster[i], node_color=color_list[i],**options)
 
+    plt.savefig('exp_data/tmp.png')
+    plt.close()
 
-def k_means(pos, dsts, video_type, user_limit, is_group):
+# Main grouping algorithm with 2D K-means algorithm
+# consider the video quality and shortest path length
+def k_means(G, dsts, video_type, user_limit, is_group):
     dst_num = len(dsts)
+    # print(dst_num)
     if dst_num <= 5:
         k = 1    
     else:
-        k = math.ceil(math.sqrt(dst_num))
-
+        # k = math.ceil(math.sqrt(dst_num))
+        k = math.floor(dst_num/5)
     if is_group == 0:
         k = 1
 
-    x_bound_low = min(pos[d][0] for d in pos)
-    x_bound_high = max(pos[d][0] for d in pos)
-    y_bound_low = min(pos[d][1] for d in pos)
-    y_bound_high = max(pos[d][1] for d in pos)
+    G_node = G.nodes()
 
     client = dict()
     for dst in dsts:
         q = dsts[dst]
-        pos_convert = [round(pos[dst][0],8), round(pos[dst][1],8)]
-        client[dst] = (video_type.index(q), pos_convert)
+        client[dst] = (video_type.index(q), dst)
     
     isFinish = 0
     while isFinish == 0:
         # Random samples
         centers = []
         for i in range(k):
-            sample = (random.randint(0, len(video_type)), [round(random.uniform(x_bound_low,x_bound_high),8), round(random.uniform(y_bound_low,y_bound_high),8)])
+            sample = (random.randint(0, len(video_type)-1), random.randint(0, len(G_node)-1))
             centers.append(sample)
 
         # Cluster users
-        cluster = clustering(client, centers)
+        cluster = clustering(G, client, centers)
 
         if min(len(cluster[i]) for i in cluster) <= user_limit:
             continue
         
         # Calculate new cluster centers
-        new_centers = get_centers(cluster, client)
+        new_centers = get_centers(G, cluster, client)
 
         isConvergence = 0
 
@@ -137,23 +158,28 @@ def k_means(pos, dsts, video_type, user_limit, is_group):
         while isConvergence == 0:
             max_dif = -1
             for i in range(k-1):
-                distance = math.sqrt((centers[i][1][0] - new_centers[i][1][0])**2 + (centers[i][1][1] - new_centers[i][1][1])**2)
+                distance = nx.shortest_path_length(G, source=centers[i][1], target=new_centers[i][1])
                 dif = math.sqrt((centers[i][0] - new_centers[i][0])**2 + distance**2)
                 max_dif = max(max_dif, dif)
             
-            #print(max_dif)
             if max_dif < 10**-10:
                 isConvergence = 1
+                ### print
+                # for j in range(len(centers)):
+                #     print("center",j,":", centers[j][1])
+                #     for i in cluster[j]:
+                #         print(i,",q=",client[i][0],",dis=", nx.shortest_path_length(G, source=centers[j][1], target=i))
+                # print_graph(G, cluster)
                 break
 
             centers = new_centers
 
-            cluster = clustering(client, centers)
+            cluster = clustering(G, client, centers)
 
             if min(len(cluster[i]) for i in cluster) <= user_limit:
                 continue
             
-            new_centers = get_centers(cluster, client)
+            new_centers = get_centers(G, cluster, client)
         
         if min(len(cluster[i]) for i in cluster) <= user_limit:
             k -= 1
