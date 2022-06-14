@@ -16,39 +16,57 @@ import math
 #         self.dst_num = int(ceil(node_num * dst_ratio))
 
 def create_topology(graph_set, factor):
-    ### Use realistic topology
-    input_G = nx.read_gml("topology/"+factor+".gml")
+    if "ER" == factor[:2]:
+        ### Random
+        node_num = int(factor[3:])
+        
+        input_G = nx.gnp_random_graph(node_num, graph_set["edge_prob"])
+        while nx.is_connected(input_G) == False:
+            print("!")
+            input_G = nx.gnp_random_graph(node_num, graph_set["edge_prob"])
+        
+        node_list = {}
+        for i,n in enumerate(input_G.nodes(data=True)):
+            node_list[n[0]] = i
 
-    max_Lon = -float('inf')
-    min_Lon = float('inf')
-    max_Lat = -float('inf')
-    min_Lat = float('inf')
+        edge_list = []
+        for n1, n2, dic in input_G.edges(data=True):
+            e = (node_list[n1], node_list[n2])
+            edge_list.append(e)
+    else:
+        ### Use realistic topology
+        input_G = nx.read_gml("topology/"+factor+".gml")
 
-    pos = {}
-    node_list = {}
-    for i,n in enumerate(input_G.nodes(data=True)):
-        node_list[n[0]] = i
-        if 'Longitude' not in n[1]:
-            lon = round(random.uniform(min_Lon,max_Lon), 5)
-        else:
-            lon = n[1]['Longitude']
-            if lon > max_Lon: max_Lon = lon
-            if lon < min_Lon: min_Lon = lon
-        if 'Latitude' not in n[1]:
-            lat = round(random.uniform(min_Lat,max_Lat), 5)
-        else:
-            lat = n[1]['Latitude']
-            if lat > max_Lat: max_Lat = lat
-            if lat < min_Lat: min_Lat = lat
+        max_Lon = -float('inf')
+        min_Lon = float('inf')
+        max_Lat = -float('inf')
+        min_Lat = float('inf')
 
-        pos[i] = [lon,lat]
+        pos = {}
+        node_list = {}
+        for i,n in enumerate(input_G.nodes(data=True)):
+            node_list[n[0]] = i
+            if 'Longitude' not in n[1]:
+                lon = round(random.uniform(min_Lon,max_Lon), 5)
+            else:
+                lon = n[1]['Longitude']
+                if lon > max_Lon: max_Lon = lon
+                if lon < min_Lon: min_Lon = lon
+            if 'Latitude' not in n[1]:
+                lat = round(random.uniform(min_Lat,max_Lat), 5)
+            else:
+                lat = n[1]['Latitude']
+                if lat > max_Lat: max_Lat = lat
+                if lat < min_Lat: min_Lat = lat
 
-    edge_list = []
-    edge_attr = {}
-    for n1, n2, dic in input_G.edges(data=True):
-        e = (node_list[n1], node_list[n2])
-        edge_list.append(e)
-        edge_attr[e] = {}
+            pos[i] = [lon,lat]
+
+        edge_list = []
+        edge_attr = {}
+        for n1, n2, dic in input_G.edges(data=True):
+            e = (node_list[n1], node_list[n2])
+            edge_list.append(e)
+            edge_attr[e] = {}
 
     ### Grid Grpah
     # m = int(math.floor(math.sqrt(node_num)))
@@ -72,12 +90,6 @@ def create_topology(graph_set, factor):
     # nx.set_node_attributes(G, {n: {'vnf': []} for n in G.nodes})
     # nx.set_edge_attributes(G, edge_attr)
 
-    ### Random
-    # random_seed = 138
-    # G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
-    # while nx.is_connected(G) == False:
-    #     G = nx.gnp_random_graph(node_num, edge_prob, random_seed)
-    # pos = nx.spring_layout(G) 
 
     nx.set_node_attributes(G, {n: {'mem_capacity': 5} for n in G.nodes})
     nx.set_node_attributes(G, {n: {'com_capacity': round(random.uniform(5,10), 2)} for n in G.nodes})

@@ -9,10 +9,16 @@ import pandas as pd
 import Graph
 import experience_setting as exp_set
 import grouping
+import grouping_noQ
+import grouping_noPos
 import benchmark_unicast
 import benchmark_JPR
 import benchmark_firstFit
-import main_multicast6
+import main_multicast8
+import main_multicast9
+import main_multicast10
+import main_multicast11
+import main_multicast12
 
 
 '''
@@ -28,12 +34,12 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
     alpha = 0.6
     beta = 1 - alpha
 
-    dst_ratio = 0.2
-    edge_prob = 0.8 
+    dst_ratio = 0.4
+    edge_prob = 0.2
 
     exp_factor = dst_ratio
     add_factor = 0.1
-    bound_factor = 0.2
+    bound_factor = 0.4
     factor = topology
 
     # cost weight: transimission, processing, placing
@@ -69,11 +75,14 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
         exp_data_merge = [[],[],[],[],[],[],[],[],[]]
 
         ### Execute Algorithms
-        input_G = nx.read_gml("topology/"+factor+".gml") # Agis(25), Dfn(58), Ion(125), Colt(153)
-        node_num = len(input_G.nodes())
+        if "ER" == factor[:2]:
+            node_num = int(factor[3:])
+        else:
+            input_G = nx.read_gml("topology/"+factor+".gml") # Agis(25), Dfn(58), Ion(125), Colt(153)
+            node_num = len(input_G.nodes())
 
         dst_num = int(np.ceil(node_num * exp_factor))   
-        graph_exp = {'bandwidth': bandwidth}
+        graph_exp = {'bandwidth': bandwidth, 'edge_prob': edge_prob}
         service_exp = {'dst_num': dst_num, 'video_type': video_type}
         
         if gen_new_data == 1:
@@ -82,10 +91,15 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
 
             print('exp ok')
 
+        ### degree
+        count_d = dict()
+        degree_list = []
+        exp_id = []
+
         for i in range(exp_num):
             if i % 10 == 0:
                 print(i, end=' ')
-
+            
             # Read Graph
             input_graph = exp_set.read_exp_graph(graph_exp, i, factor, exp_factor)
             G_unicast = copy.deepcopy(input_graph[0]) 
@@ -100,16 +114,33 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
             src = input_service[0]
             dsts = input_service[1]
 
+            ### degree
+            degree_src = input_graph[0].degree[src]
+            
+            # if degree_src not in count_d:
+            #     count_d[degree_src] = 0
+
+            # count_d[degree_src] += 1
+            
+            # if count_d[degree_src] > 3: continue
+
+            
+            degree_list.append(degree_src)
+            # exp_id.append(i)
+
             # Grouping
-            group_list = grouping.k_means(pos, dsts, video_type, user_limit, is_group)
+            group_list = grouping.k_means(input_graph[0], dsts, video_type, user_limit, is_group)
+            # group_list = grouping_noPos.k_means(input_graph[1], dsts, video_type, user_limit, is_group)
             group_num.append(len(group_list))
-            # print('group ok',len(group_list))
+            # print('group ok')
 
             G_main_all = list()
 
             delay_unicast = list()
-            delay_JPR = list()
-            delay_JPR_notReuse = list()
+            delay_JPR = [0]
+            delay_JPR_notReuse = [0]
+            # delay_JPR = list()
+            # delay_JPR_notReuse = list()
             delay_firstFit = list()
             delay_main = list()
 
@@ -157,12 +188,12 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 # print('unicast', end=' ')
 
                 pre_time = time.time()
-                G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
+                # G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
                 running_time_JPR += time.time() - pre_time
                 # print('JPR', end=' ')
 
                 pre_time = time.time()
-                G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
+                # G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
                 running_time_JPR_notReuse += time.time() - pre_time
                 # print('JPR_notReuse', end=' ')
 
@@ -172,42 +203,42 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 # print('firstFit', end=' ')
 
                 pre_time = time.time()
-                G_main_ans = main_multicast6.search_multipath(G_main, service_main, quality_list)
+                G_main_ans = main_multicast12.search_multipath(G_main, service_main, quality_list)
                 running_time_main += time.time() - pre_time
                 running_time_merge += running_time_main
                 # print('main', end=' ')
                 G_main_all.append(G_main_ans)
 
                 G_unicast = copy.deepcopy(G_unicast_ans[0])
-                G_JPR = copy.deepcopy(G_JPR_ans[0])
-                G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
+                # G_JPR = copy.deepcopy(G_JPR_ans[0])
+                # G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
                 G_firstFit = copy.deepcopy(G_firstFit_ans[0])
                 G_main = copy.deepcopy(G_main_ans[0])
 
                 failed_num_unicast += len(G_unicast_ans[2])
-                if nx.classes.function.is_empty(G_JPR_ans[1]):
-                    failed_num_JPR += len(group)
-                if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
-                    failed_num_JPR_notReuse += len(group)
+                # if nx.classes.function.is_empty(G_JPR_ans[1]):
+                #     failed_num_JPR += len(group)
+                # if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
+                #     failed_num_JPR_notReuse += len(group)
                 if nx.classes.function.is_empty(G_firstFit_ans[1]):
                     failed_num_firstFit+= len(group)
                 failed_num_main += len(G_main_ans[6])
 
                 transcoder_num_unicast += Graph.count_vnf(G_unicast_ans[-2])
-                transcoder_num_JPR += Graph.count_vnf(G_JPR_ans[-2])
-                transcoder_num_JPR_notReuse += Graph.count_vnf(G_JPR_notReuse_ans[-2])
+                # transcoder_num_JPR += Graph.count_vnf(G_JPR_ans[-2])
+                # transcoder_num_JPR_notReuse += Graph.count_vnf(G_JPR_notReuse_ans[-2])
                 transcoder_num_firstFit += Graph.count_vnf(G_firstFit_ans[-2])
                 transcoder_num_main += Graph.count_vnf(G_main_ans[-1])
 
                 delay_unicast.append(Graph.max_len(G_unicast_ans[-1]))
-                delay_JPR.append(Graph.max_len(G_JPR_ans[-1]))
-                delay_JPR_notReuse.append(Graph.max_len(G_JPR_notReuse_ans[-1]))
+                # delay_JPR.append(Graph.max_len(G_JPR_ans[-1]))
+                # delay_JPR_notReuse.append(Graph.max_len(G_JPR_notReuse_ans[-1]))
                 delay_firstFit.append(Graph.max_len(G_firstFit_ans[-1]))
                 delay_main.append(Graph.max_len(G_main_ans[2]))
                 
             ### Running merge method
             pre_time = time.time()
-            G_merge_ans = main_multicast6.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
+            G_merge_ans = main_multicast12.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
             running_time_merge += time.time() - pre_time
             # print('merge', end=' ')
             
@@ -301,8 +332,14 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
         with pd.ExcelWriter('exp_data/'+factor+'_d'+str(exp_factor)+'_bw'+str(bandwidth)+'_exp'+str(exp_num)+'_g'+str(is_group)+'.xlsx') as writer:  
             for i in range(9):
                 data = pd.DataFrame({"Unicast":exp_data_unicast[i],"JPR":exp_data_JPR[i],\
-                "JPR_notReuse":exp_data_JPR_notReuse[i],"FirstFit":exp_data_firstFit[i],"Main":exp_data_main[i],"Merge":exp_data_merge[i]})
+                "JPR_notReuse":exp_data_JPR_notReuse[i],"FirstFit":exp_data_firstFit[i],"Main":exp_data_main[i],"Merge":exp_data_merge[i],"degree": degree_list})
                 data.to_excel(writer, sheet_name=title[i], index=True)
+
+        ### degree
+        # with pd.ExcelWriter('exp_data/'+factor+'_d'+str(exp_factor)+'_bw'+str(bandwidth)+'_exp'+str(exp_num)+'_g'+str(is_group)+'.xlsx') as writer:  
+        #     for i in range(9):
+        #         data = pd.DataFrame({"exp_id": exp_id, "degree": degree_list,"Merge":exp_data_merge[i]})
+        #         data.to_excel(writer, sheet_name=title[i], index=False)
 
         exp_factor = round(exp_factor + add_factor, 2)
 
@@ -315,5 +352,5 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
     print(group_num)
     print()
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
