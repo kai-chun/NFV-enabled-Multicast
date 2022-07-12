@@ -26,6 +26,38 @@ def cal_total_cost(G, weight, is_reuse):
     total_cost = weight[0]*trans_cost + weight[1]*proc_cost +weight[2]*plac_cost
     return (total_cost, trans_cost, proc_cost, plac_cost)
 
+def cal_total_cost_normalize(orig_G, G, weight, is_reuse):
+    trans_cost = 0
+    proc_cost = 0
+    plac_cost = 0
+    total_cost = 0
+    
+    total_trans = 0
+    total_proc = 0
+    total_plac = 0
+
+    for (n1,n2,dic) in orig_G.edges(data=True):
+        total_trans += dic['bandwidth']
+    for (n,dic) in orig_G.nodes(data=True):
+        total_proc += dic['com_capacity']
+        total_plac += dic['mem_capacity']
+
+    for (n1,n2,dic) in G.edges(data=True):
+        trans_cost += dic['data_rate']
+    for (n,dic) in G.nodes(data=True):
+        if len(dic['vnf']) != 0:
+            if is_reuse:
+                plac_cost += len(set(v[0][0] for v in dic['vnf']))
+            else:
+                plac_cost += len(dic['vnf'])
+            for vnf in dic['vnf']:
+                proc_cost += vnf[2]
+    
+    total_cost = weight[0]*trans_cost/total_trans + weight[1]*proc_cost/total_proc +weight[2]*plac_cost/total_plac
+    # total_cost = trans_cost/total_trans + proc_cost/total_proc + plac_cost/total_plac
+
+    return (total_cost*100, trans_cost/total_trans*100, proc_cost/total_proc*100, plac_cost/total_plac*100)
+
 def cal_trans_cost(G):
     trans_cost = 0
     for (n1,n2,dic) in G.edges(data=True):
@@ -174,6 +206,38 @@ def find_common_path_len_node_main(dsts, shortest_path_set, all_data_rate):
             common_length += 1
     return common_length
 
+def find_all_common_path_len(all_dsts, target_dsts, shortest_path_set):
+    common_length = 1
+    main_dst = target_dsts[0]
+
+    # Find max length of path in target_dsts
+    min_len = float('inf')
+    for d in target_dsts:
+        min_len = min(min_len,len(shortest_path_set[d]))
+
+    if len(target_dsts) == 1:
+        return common_length-1
+
+    # Find union path of dst
+    common_flag = 1
+    while common_flag == 1:
+
+        for i in range(len(all_dsts)):
+            else_dst = all_dsts[i]
+            if else_dst not in target_dsts or main_dst == else_dst: continue
+        
+            if min_len < common_length:
+                common_flag = 0
+                return common_length-1
+                
+            if shortest_path_set[main_dst][:common_length] != shortest_path_set[else_dst][:common_length]:
+                common_flag = 0
+                return common_length-1
+
+        common_length += 1
+ 
+    return common_length-1
+
 def add_new_edge(G, path, path_set, dst, e, data_rate, all_data_rate):  
     if path.has_edge(*e) == False:
         path.add_edge(*e,data_rate=data_rate[2],data=[data_rate[1]])
@@ -186,6 +250,23 @@ def add_new_edge(G, path, path_set, dst, e, data_rate, all_data_rate):
             path.edges[e]['data'].append(data_rate[1])
             G.edges[e]['data_rate'] += data_rate[2]
             G.edges[e]['bandwidth'] -= data_rate[2]
+
+def add_new_edge_main(G, path, path_set, dst, e, data_rate, all_data_rate):  
+    commom_len = find_common_path_len_edge(dst, path_set, all_data_rate) 
+    if len(path_set[dst]) > commom_len and G.edges[e]['bandwidth'] >= data_rate[2]:
+        if path.has_edge(*e) == False:
+            path.add_edge(*e,data_rate=data_rate[2],data=[data_rate[1]])
+        else:
+            path.edges[e]['data_rate'] += data_rate[2]
+            path.edges[e]['data'].append(data_rate[1])
+        
+        G.edges[e]['data_rate'] += data_rate[2]
+        G.edges[e]['bandwidth'] -= data_rate[2]
+        return True
+    
+    if len(path_set[dst]) <= commom_len: return True
+    
+    return False
     
 def add_new_processing_data(G, path, path_set, dst, node, vnf, data_rate, all_data_rate):
     for n in path.nodes:

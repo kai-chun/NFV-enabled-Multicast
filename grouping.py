@@ -76,7 +76,7 @@ def clustering(G, dsts, centers):
     return cluster
         
 # Get new center in cluster
-# center has the average quality and the minimum standard deviation distance to every dst
+# center has the average quality and the minimum distance to every dst
 def get_centers(G, cluster, client):
     centers = []
 
@@ -123,8 +123,8 @@ def k_means(G, dsts, video_type, user_limit, is_group):
     if dst_num <= 5:
         k = 1    
     else:
-        # k = math.ceil(math.sqrt(dst_num))
-        k = math.floor(dst_num/5)
+        k = math.floor(math.sqrt(dst_num))
+        # k = math.floor(dst_num/5)
     if is_group == 0:
         k = 1
 

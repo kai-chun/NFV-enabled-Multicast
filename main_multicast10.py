@@ -477,7 +477,7 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
 
     # Calculate the cost of merge 2 groups, and choose the minimum cost merging strategy.
     is_finish = False
-    merge_weight = (1, 0.4, 0.8)
+    merge_weight = (0.4, 0.4, 1)
     while is_finish == False:
         cost_metric = dict()
 
@@ -525,7 +525,7 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
     # print("merge group: ", Graph.cal_total_cost(G_merge, weight, True))
     merge_path_info = copy.deepcopy(merge_group_info)
     for i in range(len(merge_path_info)):
-        merge_path_info = merge_path(G, G_merge, src, quality_list, merge_path_info, i, merge_weight)
+        merge_path_info = merge_path(G, G_merge, src, quality_list, merge_path_info, i, weight)
         
         ### print data
         # G_tmp = copy.deepcopy(G)
@@ -553,7 +553,7 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
     # print("merge path: ", Graph.cal_total_cost(G_final, weight, True))
     
     ## print data
-    # file_path = 'exp_data/merge_iter/'+str(len(G.nodes()))+'_d'+str(dst_num)+'_bw20_g1.xlsx'
+    # file_path = 'exp_data/merge_iter/'+str(len(G.nodes()))+'_d'+str(dst_num)+'_bw20_g.xlsx'
     # data = pd.DataFrame({"Merge":cost_record[0],"Cost":cost_record[1]})
     # data.to_excel(file_path, index=False)
     
@@ -564,7 +564,7 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
     # plt.legend(['Merge'], loc="lower right")
     # plt.xlabel("time")
     # plt.ylabel("Total Cost")
-    # plt.title('Graph ('+str(len(G.nodes))+', '+str(len(G.edges))+')')
+    # plt.title('Graph ('+str(len(G.nodes))+', '+str(len(G.edges))+'),'+str(len(sort_group))+'->'+str(len(sort_group)-count_m))
     # plt.tight_layout()
     # plt.savefig('exp_data/merge_iter/a10/'+str(len(G.nodes))+'_k.png')
     # plt.close()

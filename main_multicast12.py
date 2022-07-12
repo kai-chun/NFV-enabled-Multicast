@@ -501,15 +501,15 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
 
                 merge_cost_groups = Graph.cal_total_cost(G_tmp_group, merge_weight, True)
                 
-                cost_higher = False
-                for k in range(1,len(merge_cost_groups)):
-                    if merge_cost_groups[k] > orig_cost_groups[k]:
-                        cost_higher = True
-                        break
+                # cost_higher = False
+                # for k in range(1,len(merge_cost_groups)):
+                #     if merge_cost_groups[k] > orig_cost_groups[k]:
+                #         cost_higher = True
+                #         break
                 
-                if cost_higher: 
-                    cost_metric[(i,j)] = [0,0,0]
-                    continue
+                # if cost_higher: 
+                #     cost_metric[(i,j)] = [0,0,0]
+                #     continue
 
                 # Calculate merging path cost
                 new_path_info_merge = merge_path(G, G_tmp_group, src, quality_list, tmp_path_info_merge, i, weight)
@@ -562,8 +562,8 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
         count_group += 1
     
     # print(merge_path_info)
-    print("merge group count_m = ",count_m)
-    # print("merge group  = ",len(sort_group)-count_m)
+    # print("merge group count_m = ",count_m)
+    print("merge group  = ",len(sort_group)-count_m)
     # print("merge path: ", Graph.cal_total_cost(G_final, weight, True))
     
     ## print data
@@ -656,18 +656,18 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
                         total_cost = Graph.cal_total_cost(G_tmp, weight, True)
                         # print("merge cost = ", total_cost)
                         
-                        cost_higher = False
-                        for k in range(1,len(total_cost)):
-                            if total_cost[k] > orig_cost[k]:
-                                cost_higher = True
-                                break
+                        # cost_higher = False
+                        # for k in range(1,len(total_cost)):
+                        #     if total_cost[k] > orig_cost[k]:
+                        #         cost_higher = True
+                        #         break
                         
-                        if cost_higher: continue
+                        # if cost_higher: continue
 
-                        if total_cost[0] < merge_cost:
-                            merge_cost = total_cost[0]
-                            merge_group_info = copy.deepcopy(tmp_group_info)
-                            merge_G = copy.deepcopy(G_tmp)
+                        # if total_cost[0] < merge_cost:
+                        #     merge_cost = total_cost[0]
+                        #     merge_group_info = copy.deepcopy(tmp_group_info)
+                        #     merge_G = copy.deepcopy(G_tmp)
         
                     cost_metric[(dst1,dst2)] = (round(orig_cost[0] - merge_cost, 2), merge_group_info, merge_G)
                 elif vnf_id == len(sfc[dst1]) and vnf_id == len(sfc[dst2]):

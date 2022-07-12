@@ -15,6 +15,7 @@ import copy
 import networkx as nx
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
 
 import Graph
 import experience_setting as exp_set
@@ -166,10 +167,8 @@ def search_multipath(G, service, quality_list):
                     data_rate[dst].append((j,data_rate[dst][-1][1],data_rate[dst][-1][2]))
 
             e = (shortest_path[i],shortest_path[i+1])
-            if G_min.edges[e]['bandwidth'] < data_rate[dst][-1][2]:
-                is_connect = False
-                break
-            Graph.add_new_edge(G_min, multicast_path_min, shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+            is_connect = Graph.add_new_edge_main(G_min, multicast_path_min, shortest_path_set, dst, e, data_rate[dst][-1], data_rate)
+            if not is_connect: break
 
         if is_connect == False:
             G_min = copy.deepcopy(G_tmp)
@@ -209,8 +208,8 @@ def search_multipath(G, service, quality_list):
                 find_distance += 1
                 if find_distance >= len(G.edges()):
                     print('cannot find path')
-                    failed_dsts = copy.deepcopy(sort_dsts)
-                    return (G, nx.Graph(), list(), dict(), dict(), failed_dsts, failed_dsts, sfc)
+                    failed_dsts.append(d)
+                    break
             else:
                 find_distance = 1
                 place_flag = 0
@@ -265,9 +264,7 @@ def search_multipath(G, service, quality_list):
                             multicast_path_min.add_node(i, vnf=[])
                         
                         e = (last_node, i)
-                        if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
-                            is_connect = False
-                        Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
+                        is_connect = Graph.add_new_edge_main(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                     else:
                         for j in range(len(shortest_path)-1):
                             if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
@@ -277,9 +274,7 @@ def search_multipath(G, service, quality_list):
                             e = (shortest_path[j], shortest_path[j+1])
                             if j != 0:
                                 data_rate[dst].insert(-1, (shortest_path[j],data_rate[dst][0][1],data_rate[dst][0][2]))
-                            if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
-                                is_connect = False
-                            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
+                            is_connect = Graph.add_new_edge_main(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
 
                     is_process_data = Graph.add_new_processing_data_main(G_min, multicast_path_min, update_shortest_path_set, dst, len(update_shortest_path_set[dst])-1, vnf, data_rate[dst][-2], data_rate)
 
@@ -330,10 +325,7 @@ def search_multipath(G, service, quality_list):
                             update_shortest_path_set[dst].append(i)
 
                         e = (last_node, i)
-                        # If previous_node to i don't have path then build it
-                        if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
-                            is_connect = False
-                        Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
+                        is_connect = Graph.add_new_edge_main(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
                     else:   
                         for j in range(len(shortest_path)-1):
                             if update_shortest_path_set[dst][-1] != shortest_path[j+1]:
@@ -343,9 +335,7 @@ def search_multipath(G, service, quality_list):
                             e = (shortest_path[j], shortest_path[j+1])
                             if j != 0:
                                 data_rate[dst].insert(-1, (shortest_path[j],data_rate[dst][0][1],data_rate[dst][0][2]))
-                            if G_min.edges[e]['bandwidth'] < data_rate[dst][-2][2]:
-                                is_connect = False
-                            Graph.add_new_edge(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
+                            is_connect = Graph.add_new_edge_main(G_min, multicast_path_min, update_shortest_path_set, dst, e, data_rate[dst][-2], data_rate)
 
                     is_process_data = Graph.add_new_processing_data_main(G_min, multicast_path_min, update_shortest_path_set, dst, len(update_shortest_path_set[dst])-1, vnf, data_rate[dst][-2], data_rate)
 
@@ -427,41 +417,17 @@ def search_multipath(G, service, quality_list):
     return (G_min, multicast_path_min, update_shortest_path_set, final_sfc, data_rate, sort_dsts, failed_dsts, sfc)
 
 def merge_group(G, G_min, src, quality_list, all_group_result, weight):
-    ### print data
-    dst_num = 0
-    cost_record = [[],[]]
-    ###
-
+    # Tackle the information of each group
     failed_group = list()
-    all_group = list()
+    sort_group = list()
     for g in all_group_result:
         if nx.classes.function.is_empty(g[1]):
+            # print("empty")
             failed_group.extend(g[6])
-            dst_num += len(g[6])
         else:
-            all_group.append([g[2],g[3],g[4],g[5]])
-            dst_num += len(g[5])
+            sort_group.append([g[2],g[3],g[4],g[5]])
             if len(g[6]) != 0:
                 failed_group.extend(g[6])
-                dst_num += len(g[6])
-
-    if len(failed_group) != 0:
-        group_info = dict()
-        sfc = dict()
-        for g in failed_group:
-            group_info[g[0]] = g[1]
-            sfc[g[0]] = []
-
-        video_type = [q for q in quality_list]
-        best_quality = video_type[max(video_type.index(group_info[g]) for g in group_info)]
-        service_fail = (src, group_info, sfc, best_quality)
-        re_route_fail_result = search_multipath(G_min, service_fail, quality_list)
-        if not nx.classes.function.is_empty(re_route_fail_result[1]):
-            # print("more")
-            all_group.append([re_route_fail_result[2],re_route_fail_result[3],re_route_fail_result[4],re_route_fail_result[5]])
-        failed_group = re_route_fail_result[6]
-    
-    sort_group = copy.deepcopy(all_group)
     
     G_merge = copy.deepcopy(G)
     for i in range(len(sort_group)):
@@ -469,20 +435,14 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
 
     merge_group_info = copy.deepcopy(sort_group)
     
-    ### print data
-    # cost_record[0].append("original")
-    # cost_record[1].append(Graph.cal_total_cost(G_merge, weight, True)[0])
-    
-    count_m = 0
 
     # Calculate the cost of merge 2 groups, and choose the minimum cost merging strategy.
     is_finish = False
-    merge_weight = (0.6, 0.4, 1)
     while is_finish == False:
         cost_metric = dict()
 
         # Calculate original cost
-        orig_cost_groups = Graph.cal_total_cost(G_merge, merge_weight, True)
+        orig_cost_groups = Graph.cal_total_cost_normalize(G, G_merge, weight, True)
 
         for i in range(len(sort_group)):
             for j in range(i+1, len(sort_group)):
@@ -498,7 +458,7 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
                     if new_path_info_merge[m][0] == []: continue
                     G_tmp = update_graph(G_tmp, new_path_info_merge[m])
 
-                merge_cost_groups = Graph.cal_total_cost(G_tmp, merge_weight, True)
+                merge_cost_groups = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
 
                 cost_metric[(i,j)] = [round(orig_cost_groups[0] - merge_cost_groups[0], 2), new_path_info_merge, G_tmp]
         
@@ -513,63 +473,104 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
             # print("no merge")
             break
 
-        count_m += 1
-
         merge_group_info = copy.deepcopy(cost_metric[merge_result][1])
         G_merge = copy.deepcopy(cost_metric[merge_result][2])
 
-        ### print data
-        # cost_record[0].append("merge_group")
-        # cost_record[1].append(Graph.cal_total_cost(G_merge, weight, True)[0])
     
+    # print("before merge path", time.time()-pre_time)
     # print("merge group: ", Graph.cal_total_cost(G_merge, weight, True))
-    merge_path_info = copy.deepcopy(merge_group_info)
-    # for i in range(len(merge_path_info)):
-    #     merge_path_info = merge_path(G, G_merge, src, quality_list, merge_path_info, i, weight)
-        
-        ### print data
-        # G_tmp = copy.deepcopy(G)
-        # for m in range(len(merge_path_info)):
-        #     if merge_path_info[m][0] == []: continue
-        #     G_tmp = update_graph(G_tmp, merge_path_info[m])
 
-        # cost_record[0].append("merge_path")
-        # cost_record[1].append(Graph.cal_total_cost(G_tmp, weight, True)[0])
+    G_final = copy.deepcopy(G_merge)
+    final_path_info = copy.deepcopy(merge_group_info)
+    # print("fail_before",len(failed_group))
+    not_failed_dsts = []
+    # Find path for failed dst again
+    if len(failed_group) != 0:
+        # print("fail")
+        all_dst = dict()
+        for i in range(len(final_path_info)):
+            for d in final_path_info[i][-1]:
+                all_dst[d[0]] = (i, d[1])
 
-    G_final = copy.deepcopy(G)
-    for m in range(len(merge_path_info)):
-        if merge_path_info[m][0] == []: continue
-        G_final = update_graph(G_final, merge_path_info[m])
+        for f_dst in failed_group:
+            distance_list = {nx.shortest_path_length(G, f_dst[0], j):j for j in all_dst}
+            distance_list = sorted(distance_list.items())
+            for j in range(min(3,len(distance_list))):
+                if f_dst in not_failed_dsts: break
+                nearest_dst = distance_list[j][1]
+            
+                shortest_path = nx.algorithms.shortest_paths.dijkstra_path(G_final, nearest_dst, f_dst[0], weight='weight')
+                # print(final_path_info[all_dst[nearest_dst][0]][0][nearest_dst])
+                can_connect = True
+                for i in range(len(shortest_path)-1):
+                    e = (shortest_path[i],shortest_path[i+1])
+                    if G_final.edges[e]['bandwidth'] < quality_list[f_dst[1]]:
+                        can_connect = False
+                        break
+                if can_connect:
+                    not_failed_dsts.append(f_dst)
+                    group_id = all_dst[nearest_dst][0]
+
+                    if f_dst[1] == all_dst[nearest_dst][1]: # need same video quality
+                        final_path_info[group_id][0][f_dst[0]] = copy.deepcopy(final_path_info[group_id][0][nearest_dst] + shortest_path[1:])
+                        final_path_info[group_id][1][f_dst[0]] = copy.deepcopy(final_path_info[group_id][1][nearest_dst])
+                        final_path_info[group_id][2][f_dst[0]] = copy.deepcopy(final_path_info[group_id][2][nearest_dst])
+                        for n in shortest_path[:-1]:
+                            final_path_info[group_id][2][f_dst[0]].append((n,f_dst[1],quality_list[f_dst[1]]))
+                        final_path_info[group_id][3].append(f_dst)
+                    else: # need different video quality
+                        final_path_info.append([{},{},{},[]])
+                        final_path_info[-1][0][f_dst[0]] = copy.deepcopy(final_path_info[group_id][0][nearest_dst] + shortest_path[1:])
+                        final_path_info[-1][1][f_dst[0]] = []
+                        final_path_info[-1][2][f_dst[0]] = []
+                        for n in final_path_info[-1][0][f_dst[0]][:-1]:
+                            final_path_info[-1][2][f_dst[0]].append((n,f_dst[1],quality_list[f_dst[1]]))
+                        final_path_info[-1][3].append(f_dst)
+                        # print("----")
+                        # print(nearest_dst,all_dst[nearest_dst][1],final_path_info[group_id][0][nearest_dst])
+                        # print(final_path_info[group_id][2][nearest_dst])
+                        # print(f_dst[0],f_dst[1],final_path_info[-1][0][f_dst[0]])
+                        # print(final_path_info[-1][2][f_dst[0]])
+                        # print("----")
+                        final_path_info = add_merge_info(G_merge, src, final_path_info, group_id, -1, quality_list)
+                        
+                        if final_path_info[group_id] == [[], [], [], []]:
+                            final_path_info.insert(group_id+1, final_path_info[-1])
+                            final_path_info.pop(group_id)
+                        final_path_info.pop(-1)
+                    
+    # print(failed_group)
+    # print(not_failed_dsts)
+    for i in not_failed_dsts:
+        failed_group.remove(i)
+    # print(failed_group)
+
+    # Merge Path 
+    for i in range(len(final_path_info)):
+        merge_path_ans = merge_path(G, G_final, src, quality_list, final_path_info, i, weight)
+        G_final = copy.deepcopy(merge_path_ans[0])
+        final_path_info = copy.deepcopy(merge_path_ans[1])        
+
+    # print(final_path_info)
+    # print(Graph.cal_total_cost(G_final, weight, True))
 
     count_vnf = 0
     delay = [0]
     count_group = 0
-    for i in range(len(merge_path_info)):
-        count_vnf += Graph.count_vnf(merge_path_info[i][1])
-        delay.append(Graph.max_len(merge_path_info[i][0]))
+    for i in range(len(final_path_info)):
+        count_vnf += Graph.count_vnf(final_path_info[i][1])
+        delay.append(Graph.max_len(final_path_info[i][0]))
         count_group += 1
-    
-    # print(merge_path_info)
-    # print("merge group count_m = ",count_m)
-    # print("merge group  = ",len(sort_group)-count_m)
-    # print("merge path: ", Graph.cal_total_cost(G_final, weight, True))
-    
-    ## print data
-    # file_path = 'exp_data/merge_iter/'+str(len(G.nodes()))+'_d'+str(dst_num)+'_bw20_g.xlsx'
-    # data = pd.DataFrame({"Merge":cost_record[0],"Cost":cost_record[1]})
-    # data.to_excel(file_path, index=False)
-    
-    # time = []
-    # for i in range(len(cost_record[1])):
-    #     time.append(i)
-    # plt.plot(time, cost_record[1], color="#2ca02c")
-    # plt.legend(['Merge'], loc="lower right")
-    # plt.xlabel("time")
-    # plt.ylabel("Total Cost")
-    # plt.title('Graph ('+str(len(G.nodes))+', '+str(len(G.edges))+'),'+str(len(sort_group))+'->'+str(len(sort_group)-count_m))
-    # plt.tight_layout()
-    # plt.savefig('exp_data/merge_iter/a10/'+str(len(G.nodes))+'_k.png')
-    # plt.close()
+
+    # count_n = 0
+    # for n,dic in G_final.nodes(data=True):
+    #     if dic['com_capacity'] < 0: count_n+=1
+    #     if dic['mem_capacity'] < 0: count_n+=1
+
+    # for n1,n2,dic in G_final.edges(data=True):
+    #     if dic['bandwidth'] < 0: count_n+=1
+
+    # print("neg=",count_n)
 
     return (G_final, failed_group, count_vnf, max(delay))
 
@@ -587,102 +588,85 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
     new_group_info = copy.deepcopy(group_info)
     path_set = new_group_info[index][0]
     sfc = new_group_info[index][1]
+    data_rate = new_group_info[index][2]
     this_group_dsts = new_group_info[index][3]
-    path_length_threshold = 5 #len(G_min.edges)
+    path_length_threshold = 3 #len(G_min.edges)
+
+    dst_list = [d[0] for d in this_group_dsts]
 
     if path_set == []: 
-        return new_group_info
+        return (G_merge,new_group_info)
     
     # print('------ merge path begin ------')
     # print(path_set)
     # print(sfc)
-    # print(new_group_info[index][2])
+    # # print(data_rate)
     # print(this_group_dsts)
     # print('-------------')
-    # print(Graph.cal_total_cost(G_merge, weight, True))
-    
-    ### Merge paths with other dsts.
-    vnf_id = 0
-    count_m = 0
+    # print("nor. cost=",Graph.cal_total_cost_normalize(G, G_merge, weight, True))
+    # print("cost=",Graph.cal_total_cost(G_merge, weight, True))
+
+    dsts_without_vnf = []
+
+    # Count the number of sharing VNF on node v
+    count_VNF = {}
+    for d in sfc:
+        if len(sfc[d]) == 0: 
+            dsts_without_vnf.append(d)
+            continue
+        place_node = sfc[d][0][1]
+        if place_node not in count_VNF:
+            count_VNF[place_node] = [1,[d]]
+        else:
+            count_VNF[place_node][0] += 1
+            count_VNF[place_node][1].append(d)
+
+    # print("count_VNF:",count_VNF)
+    pre_time = time.time()
 
     is_finish = False
     while is_finish == False:
-        sfc = new_group_info[index][1]
-        
         cost_metric = dict()
-        orig_cost = Graph.cal_total_cost(G_merge, weight, True)
+        # orig_cost = Graph.cal_total_cost(G_merge, weight, True)
+        orig_cost = Graph.cal_total_cost_normalize(G, G_merge, weight, True)
         # print("orig cost = ", orig_cost)
-        for i in range(len(this_group_dsts)):
-            dst1 = this_group_dsts[i][0]
-            for j in range(i+1, len(this_group_dsts)):
-                dst2 = this_group_dsts[j][0]
+        for i in range(len(dsts_without_vnf)):
+            dst1 = dsts_without_vnf[i]
+            for j in range(i+1, len(dsts_without_vnf)):
+                dst2 = dsts_without_vnf[j]
                 # print('=================', dst1, ", ", dst2)
+               
+                shortest_path_between_dsts = nx.algorithms.shortest_paths.dijkstra_path(G_merge, dst1, dst2, weight='weight')
+                
+                if len(shortest_path_between_dsts) - 2 > path_length_threshold: continue
 
-                if vnf_id < len(sfc[dst1]) and vnf_id < len(sfc[dst2]):
-                    shortest_path_between_dsts = nx.algorithms.shortest_paths.dijkstra_path(G_merge, dst1, dst2, weight='weight')
-                    
-                    if len(shortest_path_between_dsts) - 2 > path_length_threshold: continue
+                merge_cost = orig_cost[0]
+                merge_group_info = -1
+                merge_G = nx.Graph()
 
-                    merge_cost = orig_cost[0]
-                    merge_group_info = -1
-                    merge_G = nx.Graph()
+                for m in shortest_path_between_dsts:
+                    if m == src:
+                        continue
 
-                    # Iterative all node between v[1] and sfc[main_dst][j][1],
-                    # calculate their cost, and get the node has minimim cost to merge two path.
-                    for m in shortest_path_between_dsts:
-                        if m == src or m == dst1 or m == dst2:
-                            continue
+                    merge_info = [src, dst1, dst2, m]
 
-                        merge_info = [src, dst1, dst2, m]
+                    tmp_group_info = copy.deepcopy(new_group_info)
+                    tmp_group_info[index] = update_merge_info(G_merge, merge_info, -1, new_group_info[index])
 
-                        tmp_group_info = copy.deepcopy(new_group_info)
-                        tmp_group_info[index] = update_merge_info(G_merge, merge_info, vnf_id, new_group_info[index])
+                    G_tmp = copy.deepcopy(G)
+                    for k in range(len(tmp_group_info)):
+                        G_tmp = update_graph(G_tmp, tmp_group_info[k])
+                    # total_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                    total_cost = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
+                    # print("merge cost = ", total_cost)
 
-                        G_tmp = copy.deepcopy(G)
-                        for k in range(len(tmp_group_info)):
-                            G_tmp = update_graph(G_tmp, tmp_group_info[k])
-                        total_cost = Graph.cal_total_cost(G_tmp, weight, True)
-                        # print("merge cost = ", total_cost)
-
-                        if total_cost[0] < merge_cost:
-                            merge_cost = total_cost[0]
-                            merge_group_info = copy.deepcopy(tmp_group_info)
-                            merge_G = copy.deepcopy(G_tmp)
-        
-                    cost_metric[(dst1,dst2)] = (round(orig_cost[0] - merge_cost, 2), merge_group_info, merge_G)
-                elif vnf_id == len(sfc[dst1]) and vnf_id == len(sfc[dst2]):
-                    shortest_path_between_dsts = nx.algorithms.shortest_paths.dijkstra_path(G_merge, dst1, dst2, weight='weight')
-
-                    if len(shortest_path_between_dsts) - 2 > path_length_threshold: continue
-
-                    merge_cost = orig_cost[0]
-                    merge_group_info = -1
-                    merge_G = nx.Graph()
-
-                    # Iterative all node between v[1] and sfc[main_dst][j][1],
-                    # calculate their cost, and get the node has minimim cost to merge two path.
-                    for m in shortest_path_between_dsts:
-                        if m == src:
-                            continue
-
-                        merge_info = [src, dst1, dst2, m]
-
-                        tmp_group_info = copy.deepcopy(new_group_info)
-                        tmp_group_info[index] = update_merge_info(G_merge, merge_info, -1, new_group_info[index])
-
-                        G_tmp = copy.deepcopy(G)
-                        for k in range(len(tmp_group_info)):
-                            G_tmp = update_graph(G_tmp, tmp_group_info[k])
-                        total_cost = Graph.cal_total_cost(G_tmp, weight, True)
-                        # print("merge cost = ", total_cost)
-
-                        if total_cost[0] < merge_cost:
-                            merge_cost = total_cost[0]
-                            merge_group_info = copy.deepcopy(tmp_group_info)
-                            merge_G = copy.deepcopy(G_tmp)
-        
-                    cost_metric[(dst1,dst2)] = (round(orig_cost[0] - merge_cost, 2), merge_group_info, merge_G)
-
+                    if total_cost[0] < merge_cost:
+                        merge_cost = total_cost[0]
+                        merge_group_info = copy.deepcopy(tmp_group_info)
+                        merge_G = copy.deepcopy(G_tmp)
+    
+                cost_metric[(dst1,dst2)] = (round(orig_cost[0] - merge_cost, 2), merge_group_info, merge_G)
+                
         # Choose the maximum save_cost (orig_cost - merge_cost) and merge the paths with merge_node.
         if cost_metric == {}:
             is_finish = True
@@ -695,39 +679,96 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
             # print("no merge")
             break
 
-        # print(merge_result, cost_metric[merge_result][0])
-        
-        # print('------------')
-        # print(new_group_info[index][0][merge_result[0]], new_group_info[index][0][merge_result[1]])
-        # print(new_group_info[index][1][merge_result[0]], new_group_info[index][1][merge_result[1]])
-        # print(new_group_info[index][2][merge_result[0]], new_group_info[index][2][merge_result[1]])
-        # print('-----------')
-
         new_group_info = copy.deepcopy(cost_metric[merge_result][1])
         G_merge = copy.deepcopy(cost_metric[merge_result][2])
 
-        # print('------------')
-        # print(new_group_info[index][0][merge_result[0]], new_group_info[index][0][merge_result[1]])
-        # print(new_group_info[index][1][merge_result[0]], new_group_info[index][1][merge_result[1]])
-        # print(new_group_info[index][2][merge_result[0]], new_group_info[index][2][merge_result[1]])
-        # print('-----------')
-        # print(Graph.cal_total_cost(G_merge, weight, True))
-        
-        count_m += 1
+    # running_time_main = time.time() - pre_time
+    # print("merge no VNF =",time.time() - pre_time)
+    # print("merge cost=",Graph.cal_total_cost(G_merge, weight, True))
+    # print("dsts_without_vnf=",Graph.cal_total_cost_normalize(G, G_merge, weight, True))
+
+    count_VNF_list = list(count_VNF.keys())
+
+    # 把其他部署在比較少共用節點的VNF移動位置
+    # 想想看怎麼樣能移動整坨，增加VNF嗎，閾值為多少要增加新的
+
+    pre_time = time.time()
+    # Find migrate VNF node
+    for node in count_VNF:
+        path_set = new_group_info[index][0]
+        sfc = new_group_info[index][1]
+
+        same_VNF_dsts = count_VNF[node][1]
+
+        common_len = Graph.find_all_common_path_len(dst_list, same_VNF_dsts, path_set)
+        one_dst_in_count_VNF = same_VNF_dsts[0]
+        if common_len > sfc[one_dst_in_count_VNF][0][2]:
+            migrate_node = path_set[one_dst_in_count_VNF][common_len-1]
+            count_VNF_list.append(migrate_node)
+
+    # print("720=",time.time()-pre_time)
+
+    pre_time = time.time()
+    count_VNF = {k: v for k, v in sorted(count_VNF.items(), key=lambda item: item[1])}
+    # print(count_VNF)
+
+    # Merge Path or Migrate VNF
+    for node in count_VNF:
+        same_VNF_dsts = count_VNF[node][1]
+
+        for d in same_VNF_dsts:
+            # orig_cost = Graph.cal_total_cost(G_merge, weight, True)
+            orig_cost = Graph.cal_total_cost_normalize(G, G_merge, weight, True)
+            merge_cost = orig_cost[0]
+            merge_group_info = new_group_info
+            merge_G = copy.deepcopy(G_merge)
+            
+            for tmp_node in count_VNF_list:
+                if tmp_node == d or tmp_node == node: continue
+
+                merge_info = [src, d, d, tmp_node]
+
+                tmp_group_info = copy.deepcopy(new_group_info)
+                tmp_group_info[index] = update_merge_info(G_merge, merge_info, 0, new_group_info[index])
+
+                G_tmp = copy.deepcopy(G)
+                for k in range(len(tmp_group_info)):
+                    G_tmp = update_graph(G_tmp, tmp_group_info[k])
+
+                # tmp_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                tmp_cost = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
+                
+                if tmp_cost[0] < merge_cost:
+                    merge_cost = tmp_cost[0]
+                    merge_group_info = copy.deepcopy(tmp_group_info)
+                    merge_G = copy.deepcopy(G_tmp)
+            
+            new_group_info = copy.deepcopy(merge_group_info)
+            G_merge = copy.deepcopy(merge_G)
+            # print("same_VNF_dsts=",Graph.cal_total_cost_normalize(G, G_merge, weight, True))
+
+    # print("759=",time.time()-pre_time)
+
+    final_group_info = copy.deepcopy(new_group_info)
+
+    G_merge = copy.deepcopy(G)
+    for k in range(len(final_group_info)):
+        G_merge = update_graph(G_merge, final_group_info[k])
         
     # path_set = new_group_info[index][0]
     # sfc = new_group_info[index][1]
     # data_rate = new_group_info[index][2]
 
     # print('------------')
-    # print(path_set)
-    # print(sfc)
-    # print(data_rate)
-    # print("merge path count_m =", count_m)
-    # print(Graph.cal_total_cost(G_merge, weight, True))
+    # print(final_group_info[index][0])
+    # print(final_group_info[index][1])
+    # print(final_group_info[index][2])
+    # # print("merge path count_m =", count_m)
+    # print("final cost=",Graph.cal_total_cost(G_merge, weight, True))
+    # print("final=",Graph.cal_total_cost_normalize(G, G_merge, weight, True))
     # print('-------------')
 
-    return new_group_info
+    return (G_merge,final_group_info)
 
 # Update path_set, data_rate and sfc after merging for one group.
 # merge_info = [src, dst1, dst2, place_node]
@@ -849,11 +890,6 @@ def add_vnf_to_path(G, path_info, src, send_data, quality_list):
     path_set = path_info[0]
     sfc = path_info[1]
     data_rate = path_info[2]
-
-    # print('---- add vnf to path begin ----')
-    # print(path_set)
-    # print(sfc)
-    # print(data_rate)
 
     new_path_set = copy.deepcopy(path_set)
     new_sfc = copy.deepcopy(sfc)

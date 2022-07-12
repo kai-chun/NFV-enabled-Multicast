@@ -14,8 +14,9 @@ import grouping_noPos
 import benchmark_unicast
 import benchmark_JPR
 import benchmark_firstFit
-import main_multicast11
 import main_multicast14
+import main_multicast11
+import main_multicast13
 
 '''
 # 調整各種參數（拓墣、節點數[20-100,200]、使用者比例），印出數據
@@ -34,12 +35,11 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
     edge_prob = 0.2
 
     exp_factor = dst_ratio
-    add_factor = 0.4
+    add_factor = 0.1
     bound_factor = 0.2
     factor = topology
 
     # cost weight: transimission, processing, placing
-    # weight = (0.6, 0.4, 1)
     weight = (1, 1, 1)
    
     #vnf_num = random.randint(1,1)
@@ -54,6 +54,7 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
 
     times = []
     group_num = []
+    cost = []
 
     while exp_factor <= bound_factor: 
         if exp_factor == 0.3: 
@@ -96,9 +97,9 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
         exp_id = []
 
         for i in range(exp_num):
-            if i % 10 == 0:
-                print(i, end=' ')
-            
+            if i % 1 == 0:
+                print(i, end='th ')
+
             # Read Graph
             input_graph = exp_set.read_exp_graph(graph_exp, i, factor, exp_factor)
             G_unicast = copy.deepcopy(input_graph[0]) 
@@ -118,13 +119,6 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
             exp_id.append(i)
      
             degree_list.append(degree_src)
-
-            # Grouping
-            group_list_noG = grouping.k_means(input_graph[0], dsts, video_type, user_limit, 0)
-            group_list = grouping.k_means(input_graph[0], dsts, video_type, user_limit, is_group)
-            # group_list = grouping_noPos.k_means(input_graph[1], dsts, video_type, user_limit, is_group)
-            # group_num.append(len(group_list))
-            # print('group ok')
 
             G_main_noG_all = list()
             G_main_all = list()
@@ -163,6 +157,18 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
             running_time_main = 0
             running_time_merge = 0
 
+            # Grouping
+            group_list_noG = grouping.k_means(input_graph[0], dsts, video_type, user_limit, 0)
+            pre_time = time.time()
+            # print('no group ok')
+            group_list = grouping.k_means(input_graph[0], dsts, video_type, user_limit, is_group)
+            running_time_main += time.time() - pre_time
+            # print(running_time_main)
+            # group_list = grouping_noQ.k_means(input_graph[0], dsts, video_type, user_limit, is_group)
+            # group_list = grouping_noPos.k_means(input_graph[1], dsts, video_type, user_limit, is_group)
+            # group_num.append(len(group_list))
+            # print('group ok')
+
             # Find multicast path for all groups
             for j in group_list_noG:
                 group = group_list_noG[j]
@@ -186,52 +192,52 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 # print('unicast', end=' ')
 
                 pre_time = time.time()
-                G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
+                # G_JPR_ans = benchmark_JPR.search_multipath(G_JPR, service_JPR, alpha, vnf_type, quality_list, isReuse=True)
                 running_time_JPR += time.time() - pre_time
                 # print('JPR', end=' ')
 
                 pre_time = time.time()
-                G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
+                # G_JPR_notReuse_ans = benchmark_JPR.search_multipath(G_JPR_notReuse, service_JPR_notReuse, alpha, vnf_type, quality_list, isReuse=False)
                 running_time_JPR_notReuse += time.time() - pre_time
                 # print('JPR_notReuse', end=' ')
 
                 pre_time = time.time()
-                G_firstFit_ans = benchmark_firstFit.search_multipath(G_firstFit, pos, service_firstFit, quality_list)
+                # G_firstFit_ans = benchmark_firstFit.search_multipath(G_firstFit, pos, service_firstFit, quality_list)
                 running_time_firstFit += time.time() - pre_time
                 # print('firstFit', end=' ')
 
                 pre_time = time.time()
-                G_main_noG_ans = main_multicast14.search_multipath(G_main_noG, service_main_noG, quality_list)
+                G_main_noG_ans = main_multicast13.search_multipath(G_main_noG, service_main_noG, quality_list)
                 running_time_main_noG += time.time() - pre_time
                 running_time_merge_noG += running_time_main_noG
                 # print('main', end=' ')
                 G_main_noG_all.append(G_main_noG_ans)
 
                 G_unicast = copy.deepcopy(G_unicast_ans[0])
-                G_JPR = copy.deepcopy(G_JPR_ans[0])
-                G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
-                G_firstFit = copy.deepcopy(G_firstFit_ans[0])
+                # G_JPR = copy.deepcopy(G_JPR_ans[0])
+                # G_JPR_notReuse = copy.deepcopy(G_JPR_notReuse_ans[0])
+                # G_firstFit = copy.deepcopy(G_firstFit_ans[0])
                 G_main_noG = copy.deepcopy(G_main_noG_ans[0])
 
                 failed_num_unicast += len(G_unicast_ans[2])
-                if nx.classes.function.is_empty(G_JPR_ans[1]):
-                    failed_num_JPR += len(group)
-                if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
-                    failed_num_JPR_notReuse += len(group)
-                if nx.classes.function.is_empty(G_firstFit_ans[1]):
-                    failed_num_firstFit+= len(group)
+                # if nx.classes.function.is_empty(G_JPR_ans[1]):
+                #     failed_num_JPR += len(group)
+                # if nx.classes.function.is_empty(G_JPR_notReuse_ans[1]):
+                #     failed_num_JPR_notReuse += len(group)
+                # if nx.classes.function.is_empty(G_firstFit_ans[1]):
+                #     failed_num_firstFit+= len(group)
                 failed_num_main_noG += len(G_main_noG_ans[6])
 
                 transcoder_num_unicast += Graph.count_vnf(G_unicast_ans[-2])
-                transcoder_num_JPR += Graph.count_vnf(G_JPR_ans[-2])
-                transcoder_num_JPR_notReuse += Graph.count_vnf(G_JPR_notReuse_ans[-2])
-                transcoder_num_firstFit += Graph.count_vnf(G_firstFit_ans[-2])
+                # transcoder_num_JPR += Graph.count_vnf(G_JPR_ans[-2])
+                # transcoder_num_JPR_notReuse += Graph.count_vnf(G_JPR_notReuse_ans[-2])
+                # transcoder_num_firstFit += Graph.count_vnf(G_firstFit_ans[-2])
                 transcoder_num_main_noG += Graph.count_vnf(G_main_noG_ans[-1])
 
                 delay_unicast.append(Graph.max_len(G_unicast_ans[-1]))
-                delay_JPR.append(Graph.max_len(G_JPR_ans[-1]))
-                delay_JPR_notReuse.append(Graph.max_len(G_JPR_notReuse_ans[-1]))
-                delay_firstFit.append(Graph.max_len(G_firstFit_ans[-1]))
+                # delay_JPR.append(Graph.max_len(G_JPR_ans[-1]))
+                # delay_JPR_notReuse.append(Graph.max_len(G_JPR_notReuse_ans[-1]))
+                # delay_firstFit.append(Graph.max_len(G_firstFit_ans[-1]))
                 delay_main_noG.append(Graph.max_len(G_main_noG_ans[2]))
 
             # Find multicast path for all groups
@@ -247,10 +253,10 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 service_main = (src, group_info, sfc, best_quality)
 
                 pre_time = time.time()
-                G_main_ans = main_multicast14.search_multipath(G_main, service_main, quality_list)
+                G_main_ans = main_multicast13.search_multipath(G_main, service_main, quality_list)
                 running_time_main += time.time() - pre_time
                 running_time_merge += running_time_main
-                # print('main', end=' ')
+                # print('main ok', end=' ')
                 G_main_all.append(G_main_ans)
 
                 G_main = copy.deepcopy(G_main_ans[0])
@@ -263,17 +269,17 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 
             ### Running merge method
             pre_time = time.time()
-            G_merge_noG_ans = main_multicast14.merge_group(G_original, G_main_noG, src, quality_list, G_main_noG_all, weight)
+            G_merge_noG_ans = main_multicast13.merge_group(G_original, G_main_noG, src, quality_list, G_main_noG_all, weight)
             running_time_merge_noG += time.time() - pre_time
-            # print('merge', end=' ')
+            # print('merge noG ok', end=' ')
 
             failed_num_merge_noG = len(G_merge_noG_ans[1])
             transcoder_num_merge_noG = G_merge_noG_ans[-2]
             
             pre_time = time.time()
-            G_merge_ans = main_multicast14.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
+            G_merge_ans = main_multicast13.merge_group(G_original, G_main, src, quality_list, G_main_all, weight)
             running_time_merge += time.time() - pre_time
-            # print('merge', end=' ')
+            # print('merge ok', end=' ')
 
             failed_num_merge = len(G_merge_ans[1])
             transcoder_num_merge = G_merge_ans[-2]
@@ -287,10 +293,10 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
             # cost_tuple_main = Graph.cal_total_cost(G_main, weight, True)
             # cost_tuple_merge = Graph.cal_total_cost(G_merge_ans[0], weight, True)
 
-            cost_tuple_unicast = Graph.cal_total_cost_normalize(input_graph[0], G_unicast, weight, False)
-            cost_tuple_JPR = Graph.cal_total_cost_normalize(input_graph[0],G_JPR, weight, True)
-            cost_tuple_notReuse = Graph.cal_total_cost_normalize(input_graph[0],G_JPR_notReuse, weight, False)
-            cost_tuple_firstFit = Graph.cal_total_cost_normalize(input_graph[0],G_firstFit, weight, False)
+            # cost_tuple_unicast = Graph.cal_total_cost_normalize(input_graph[0], G_unicast, weight, False)
+            # cost_tuple_JPR = Graph.cal_total_cost_normalize(input_graph[0],G_JPR, weight, True)
+            # cost_tuple_notReuse = Graph.cal_total_cost_normalize(input_graph[0],G_JPR_notReuse, weight, False)
+            # cost_tuple_firstFit = Graph.cal_total_cost_normalize(input_graph[0],G_firstFit, weight, False)
             cost_tuple_main_noG = Graph.cal_total_cost_normalize(input_graph[0],G_main_noG, weight, True)
             cost_tuple_merge_noG = Graph.cal_total_cost_normalize(input_graph[0],G_merge_noG_ans[0], weight, True)
             cost_tuple_main = Graph.cal_total_cost_normalize(input_graph[0],G_main, weight, True)
@@ -298,10 +304,10 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
 
             ### Total cost, Trans_cost, Proc_cost, Plac_cost (avg to exp times)
             for j in range(4):
-                exp_data_unicast[j].append(round(cost_tuple_unicast[j], 2))
-                exp_data_JPR[j].append(round(cost_tuple_JPR[j], 2))
-                exp_data_JPR_notReuse[j].append(round(cost_tuple_notReuse[j], 2))
-                exp_data_firstFit[j].append(round(cost_tuple_firstFit[j], 2))
+                # exp_data_unicast[j].append(round(cost_tuple_unicast[j], 2))
+                # exp_data_JPR[j].append(round(cost_tuple_JPR[j], 2))
+                # exp_data_JPR_notReuse[j].append(round(cost_tuple_notReuse[j], 2))
+                # exp_data_firstFit[j].append(round(cost_tuple_firstFit[j], 2))
                 exp_data_main_noG[j].append(round(cost_tuple_main_noG[j], 2))
                 exp_data_merge_noG[j].append(round(cost_tuple_merge_noG[j], 2))
                 exp_data_main[j].append(round(cost_tuple_main[j], 2))
@@ -309,26 +315,26 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
 
             ###  Avg cost (avg to user nums)
             total_dst = dst_num
-            if total_dst == failed_num_unicast:
-                exp_data_unicast[4].append(0)
-            else:
-                dst_num_unicast = total_dst - failed_num_unicast
-                exp_data_unicast[4].append(cost_tuple_unicast[0]/dst_num_unicast)
-            if total_dst == failed_num_JPR:
-                exp_data_JPR[4].append(0)
-            else:
-                dst_num_JPR = total_dst - failed_num_JPR
-                exp_data_JPR[4].append(cost_tuple_JPR[0]/dst_num_JPR)
-            if total_dst == failed_num_JPR_notReuse:
-                exp_data_JPR_notReuse[4].append(0)
-            else:
-                dst_num_JPR_notReuse = total_dst - failed_num_JPR_notReuse
-                exp_data_JPR_notReuse[4].append(cost_tuple_notReuse[0]/dst_num_JPR_notReuse)
-            if total_dst == failed_num_firstFit:
-                exp_data_firstFit[4].append(0)
-            else:
-                dst_num_firstFit = total_dst - failed_num_firstFit
-                exp_data_firstFit[4].append(cost_tuple_firstFit[0]/dst_num_firstFit)
+            # if total_dst == failed_num_unicast:
+            #     exp_data_unicast[4].append(0)
+            # else:
+            #     dst_num_unicast = total_dst - failed_num_unicast
+            #     exp_data_unicast[4].append(cost_tuple_unicast[0]/dst_num_unicast)
+            # if total_dst == failed_num_JPR:
+            #     exp_data_JPR[4].append(0)
+            # else:
+            #     dst_num_JPR = total_dst - failed_num_JPR
+            #     exp_data_JPR[4].append(cost_tuple_JPR[0]/dst_num_JPR)
+            # if total_dst == failed_num_JPR_notReuse:
+            #     exp_data_JPR_notReuse[4].append(0)
+            # else:
+            #     dst_num_JPR_notReuse = total_dst - failed_num_JPR_notReuse
+            #     exp_data_JPR_notReuse[4].append(cost_tuple_notReuse[0]/dst_num_JPR_notReuse)
+            # if total_dst == failed_num_firstFit:
+            #     exp_data_firstFit[4].append(0)
+            # else:
+            #     dst_num_firstFit = total_dst - failed_num_firstFit
+            #     exp_data_firstFit[4].append(cost_tuple_firstFit[0]/dst_num_firstFit)
             if total_dst == failed_num_main_noG:
                 exp_data_main_noG[4].append(0)
             else:
@@ -351,40 +357,40 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
                 exp_data_merge[4].append(cost_tuple_merge[0]/dst_num_merge)
 
             ### Transcoder Number (avg to exp times)
-            exp_data_unicast[5].append(transcoder_num_unicast)
-            exp_data_JPR[5].append(transcoder_num_JPR)
-            exp_data_JPR_notReuse[5].append(transcoder_num_JPR_notReuse)
-            exp_data_firstFit[5].append(transcoder_num_firstFit)
+            # exp_data_unicast[5].append(transcoder_num_unicast)
+            # exp_data_JPR[5].append(transcoder_num_JPR)
+            # exp_data_JPR_notReuse[5].append(transcoder_num_JPR_notReuse)
+            # exp_data_firstFit[5].append(transcoder_num_firstFit)
             exp_data_main_noG[5].append(transcoder_num_main_noG)
             exp_data_merge_noG[5].append(transcoder_num_merge_noG)
             exp_data_main[5].append(transcoder_num_main)
             exp_data_merge[5].append(transcoder_num_merge)
 
             ### Delay (avg to exp times)
-            exp_data_unicast[6].append(max(delay_unicast))
-            exp_data_JPR[6].append(max(delay_JPR))
-            exp_data_JPR_notReuse[6].append(max(delay_JPR_notReuse))
-            exp_data_firstFit[6].append(max(delay_firstFit))
+            # exp_data_unicast[6].append(max(delay_unicast))
+            # exp_data_JPR[6].append(max(delay_JPR))
+            # exp_data_JPR_notReuse[6].append(max(delay_JPR_notReuse))
+            # exp_data_firstFit[6].append(max(delay_firstFit))
             exp_data_main_noG[6].append(max(delay_main_noG))
             exp_data_merge_noG[6].append(G_merge_noG_ans[-1])
             exp_data_main[6].append(max(delay_main))
             exp_data_merge[6].append(G_merge_ans[-1])
 
             ### Running time (avg to exp times)
-            exp_data_unicast[7].append(running_time_unicast)
-            exp_data_JPR[7].append(running_time_JPR)
-            exp_data_JPR_notReuse[7].append(running_time_JPR_notReuse)
-            exp_data_firstFit[7].append(running_time_firstFit)
+            # exp_data_unicast[7].append(running_time_unicast)
+            # exp_data_JPR[7].append(running_time_JPR)
+            # exp_data_JPR_notReuse[7].append(running_time_JPR_notReuse)
+            # exp_data_firstFit[7].append(running_time_firstFit)
             exp_data_main_noG[7].append(running_time_main_noG)
             exp_data_merge_noG[7].append(running_time_merge_noG)
             exp_data_main[7].append(running_time_main)
             exp_data_merge[7].append(running_time_merge)
 
             ### Failed dst ratio (avg to user nums)
-            exp_data_unicast[8].append(failed_num_unicast)
-            exp_data_JPR[8].append(failed_num_JPR)
-            exp_data_JPR_notReuse[8].append(failed_num_JPR_notReuse)
-            exp_data_firstFit[8].append(failed_num_firstFit)
+            # exp_data_unicast[8].append(failed_num_unicast)
+            # exp_data_JPR[8].append(failed_num_JPR)
+            # exp_data_JPR_notReuse[8].append(failed_num_JPR_notReuse)
+            # exp_data_firstFit[8].append(failed_num_firstFit)
             exp_data_main_noG[8].append(failed_num_main_noG)
             exp_data_merge_noG[8].append(failed_num_merge_noG)
             exp_data_main[8].append(failed_num_main)
@@ -393,24 +399,31 @@ def main(topology, bandwidth, exp_num, group, gen_new_data):
         title = {0: "Total_cost", 1: "Trans_cost", 2: "Proc_cost", 3: "Plac_cost", \
             4: "Avg_cost", 5: "Transcoder_num", 6: "Delay", 7: "Running_time", 8: "Failed_num"}
         
+        # with pd.ExcelWriter('exp_data/'+factor+'_d'+str(exp_factor)+'_bw'+str(bandwidth)+'_exp'+str(exp_num)+'_g'+str(is_group)+'.xlsx') as writer:  
+        #     for i in range(9):
+        #         data = pd.DataFrame({"Unicast":exp_data_unicast[i],"JPR":exp_data_JPR[i],\
+        #         "JPR_notReuse":exp_data_JPR_notReuse[i],"FirstFit":exp_data_firstFit[i],\
+        #         "Main_noG":exp_data_main_noG[i],"Merge_noG":exp_data_merge_noG[i],\
+        #         "Main":exp_data_main[i],"Merge":exp_data_merge[i]})
+        #         data.to_excel(writer, sheet_name=title[i], index=True)
         with pd.ExcelWriter('exp_data/'+factor+'_d'+str(exp_factor)+'_bw'+str(bandwidth)+'_exp'+str(exp_num)+'_g'+str(is_group)+'.xlsx') as writer:  
             for i in range(9):
-                data = pd.DataFrame({"Unicast":exp_data_unicast[i],"JPR":exp_data_JPR[i],\
-                "JPR_notReuse":exp_data_JPR_notReuse[i],"FirstFit":exp_data_firstFit[i],\
-                "Main_noG":exp_data_main_noG[i],"Merge_noG":exp_data_merge_noG[i],\
-                "Main":exp_data_main[i],"Merge":exp_data_merge[i]})
+                data = pd.DataFrame({"Main_noG":exp_data_main_noG[i],"Merge_noG":exp_data_merge_noG[i],\
+                    "Main":exp_data_main[i],"Merge":exp_data_merge[i]})
                 data.to_excel(writer, sheet_name=title[i], index=True)
                 
         exp_factor = round(exp_factor + add_factor, 2)
+        cost.append(sum(exp_data_merge[0]))
 
     print("=== ",factor," (",len(input_graph[0].nodes),"), BW =",bandwidth," ===")
     # print(f'{"exp num:"}{exp_num:<4d}|{"unicast":^10}|{"merge":^10}|{"main":^10}|{"JPR":^10}|{"notReuse":^10}|{"firstFit":^10}')
     # print(f'{"total_cost":12}|{exp_data_unicast[0][-1]:^10.3f}|{exp_data_merge[0][-1]:^10.3f}|{exp_data_main[0][-1]:^10.3f}|{exp_data_JPR[0][-1]:^10.3f}|{exp_data_JPR_notReuse[0][-1]:^10.3f}|{exp_data_firstFit[0][-1]:^10.3f}')
     # print(f'{"failed:"}{total_dst:<5d}|{failed_num_unicast:^10d}|{failed_num_merge:^10d}|{failed_num_main:^10d}|{failed_num_JPR:^10d}|{failed_num_JPR_notReuse:^10d}|{failed_num_firstFit:^10d}')
     # print(f'{"avg_cost":12}|{exp_data_unicast[4][-1]:^10.3f}|{exp_data_merge[4][-1]:^10.3f}|{exp_data_main[4][-1]:^10.3f}|{exp_data_JPR[4][-1]:^10.3f}|{exp_data_JPR_notReuse[4][-1]:^10.3f}|{exp_data_firstFit[4][-1]:^10.3f}')
-    print(f'{"running time":12}|{exp_data_unicast[7][-1]:^10.3f}|{exp_data_merge[7][-1]:^10.3f}|{exp_data_main[7][-1]:^10.3f}|{exp_data_JPR[7][-1]:^10.3f}|{exp_data_JPR_notReuse[7][-1]:^10.3f}|{exp_data_firstFit[7][-1]:^10.3f}')
+    # print(f'{"running time":12}|{exp_data_unicast[7][-1]:^10.3f}|{exp_data_merge[7][-1]:^10.3f}|{exp_data_main[7][-1]:^10.3f}|{exp_data_JPR[7][-1]:^10.3f}|{exp_data_JPR_notReuse[7][-1]:^10.3f}|{exp_data_firstFit[7][-1]:^10.3f}')
     # print(group_num)
-    print()
+    # print(exp_data_merge[7][-1])
+    # print(cost)
 
 # if __name__ == "__main__":
 #     main()

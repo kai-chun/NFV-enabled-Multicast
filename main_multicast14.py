@@ -477,12 +477,13 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
 
     # Calculate the cost of merge 2 groups, and choose the minimum cost merging strategy.
     is_finish = False
-    merge_weight = (0.6, 0.4, 1)
+    # merge_weight = (1, 1, 1)
     while is_finish == False:
         cost_metric = dict()
 
         # Calculate original cost
-        orig_cost_groups = Graph.cal_total_cost(G_merge, merge_weight, True)
+        # orig_cost_groups = Graph.cal_total_cost(G_merge, merge_weight, True)
+        orig_cost_groups = Graph.cal_total_cost_normalize(G, G_merge, weight, True)
 
         for i in range(len(sort_group)):
             for j in range(i+1, len(sort_group)):
@@ -498,7 +499,8 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
                     if new_path_info_merge[m][0] == []: continue
                     G_tmp = update_graph(G_tmp, new_path_info_merge[m])
 
-                merge_cost_groups = Graph.cal_total_cost(G_tmp, merge_weight, True)
+                # merge_cost_groups = Graph.cal_total_cost(G_tmp, merge_weight, True)
+                merge_cost_groups = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
 
                 cost_metric[(i,j)] = [round(orig_cost_groups[0] - merge_cost_groups[0], 2), new_path_info_merge, G_tmp]
         
@@ -524,8 +526,8 @@ def merge_group(G, G_min, src, quality_list, all_group_result, weight):
     
     # print("merge group: ", Graph.cal_total_cost(G_merge, weight, True))
     merge_path_info = copy.deepcopy(merge_group_info)
-    # for i in range(len(merge_path_info)):
-    #     merge_path_info = merge_path(G, G_merge, src, quality_list, merge_path_info, i, weight)
+    for i in range(len(merge_path_info)):
+        merge_path_info = merge_path(G, G_merge, src, quality_list, merge_path_info, i, weight)
         
         ### print data
         # G_tmp = copy.deepcopy(G)
@@ -610,7 +612,8 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
         sfc = new_group_info[index][1]
         
         cost_metric = dict()
-        orig_cost = Graph.cal_total_cost(G_merge, weight, True)
+        # orig_cost = Graph.cal_total_cost(G_merge, weight, True)
+        orig_cost = Graph.cal_total_cost_normalize(G, G_merge, weight, True)
         # print("orig cost = ", orig_cost)
         for i in range(len(this_group_dsts)):
             dst1 = this_group_dsts[i][0]
@@ -641,7 +644,8 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
                         G_tmp = copy.deepcopy(G)
                         for k in range(len(tmp_group_info)):
                             G_tmp = update_graph(G_tmp, tmp_group_info[k])
-                        total_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                        # total_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                        total_cost = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
                         # print("merge cost = ", total_cost)
 
                         if total_cost[0] < merge_cost:
@@ -673,7 +677,8 @@ def merge_path(G, G_min, src, quality_list, group_info, index, weight):
                         G_tmp = copy.deepcopy(G)
                         for k in range(len(tmp_group_info)):
                             G_tmp = update_graph(G_tmp, tmp_group_info[k])
-                        total_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                        # total_cost = Graph.cal_total_cost(G_tmp, weight, True)
+                        total_cost = Graph.cal_total_cost_normalize(G, G_tmp, weight, True)
                         # print("merge cost = ", total_cost)
 
                         if total_cost[0] < merge_cost:
